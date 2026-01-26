@@ -10,9 +10,13 @@
 - Section: $130 \times 456$ mm
 
 ### Material Properties (20f-E D.Fir-L)
-- Specified bending strength: $f_b = 30.8$ MPa
-- Specified shear strength: $f_v = 2.1$ MPa
-- Modulus of elasticity: $E = 11700$ MPa
+- Species: Douglas Fir-Larch
+- Grade: 20f-E
+- Specified bending strength: $f_b = 25.6$ MPa
+- Specified shear strength: $f_v = 2.0$ MPa
+- Modulus of elasticity: $E = 12400$ MPa
+- Service condition: Dry-service conditions
+- Treatment: Untreated
 
 ### Loading
 - Dead load: $D = 1.5$ kPa
@@ -44,7 +48,7 @@ $$
 
 $$
 \begin{align*}
-F_b &= f_b \cdot K_D \cdot K_H \cdot K_{{Sb}} \cdot K_T \\ &= 30.80 \, \text{MPa} \cdot 1.05 \cdot 1.00 \cdot 1.00 \cdot 1.00 \\ &= 32.38 \, \text{MPa} \tag{CSA O86:24 7.5.6.6.1} \\ \text{where,} \\
+F_b &= f_b \cdot K_D \cdot K_H \cdot K_{{Sb}} \cdot K_T \\ &= 25.60 \, \text{MPa} \cdot 1.05 \cdot 1.00 \cdot 1.00 \cdot 1.00 \\ &= 26.91 \, \text{MPa} \tag{CSA O86:24 7.5.6.6.1} \\ \text{where,} \\
 f_b &= \text{specified bending strength}  \\
 K_D &= \text{load-duration factor}  \\
 K_H &= \text{system factor}  \\
@@ -78,7 +82,7 @@ $$
 
 $$
 \begin{align*}
-M_{r,a} &= \phi \cdot F_b \cdot S \cdot K_x \cdot K_{{Zbg}} \\ &= 0.90 \cdot 32.38 \, \text{MPa} \cdot 4505280.00 \, \text{mm}^{3} \cdot 1.00 \cdot 1.07 \\ &= 140.92 \, \text{kN} \cdot \text{m} \tag{CSA O86:24 7.5.6.6.1 a)} \\ \text{where,} \\
+M_{r,a} &= \phi \cdot F_b \cdot S \cdot K_x \cdot K_{{Zbg}} \\ &= 0.90 \cdot 26.91 \, \text{MPa} \cdot 4505280.00 \, \text{mm}^{3} \cdot 1.00 \cdot 1.07 \\ &= 117.13 \, \text{kN} \cdot \text{m} \tag{CSA O86:24 7.5.6.6.1 a)} \\ \text{where,} \\
 \phi &= \text{resistance factor}  \\
 F_b &= \text{modified bending strength}  \\
 S &= \text{section modulus}  \\
@@ -91,7 +95,7 @@ $$
 
 $$
 \begin{align*}
-F_v &= f_v \cdot K_D \cdot K_H \cdot K_{{Sv}} \cdot K_T \\ &= 2.10 \, \text{MPa} \cdot 1.05 \cdot 1.00 \cdot 1.00 \cdot 1.00 \\ &= 2.21 \, \text{MPa} \tag{CSA O86:24 7.5.7.3 b)} \\ \text{where,} \\
+F_v &= f_v \cdot K_D \cdot K_H \cdot K_{{Sv}} \cdot K_T \\ &= 2.00 \, \text{MPa} \cdot 1.05 \cdot 1.00 \cdot 1.00 \cdot 1.00 \\ &= 2.10 \, \text{MPa} \tag{CSA O86:24 7.5.7.3 b)} \\ \text{where,} \\
 f_v &= \text{specified shear strength}  \\
 K_D &= \text{load-duration factor}  \\
 K_H &= \text{system factor}  \\
@@ -104,7 +108,7 @@ $$
 
 $$
 \begin{align*}
-V_r &= \phi \cdot F_v \cdot \frac{2 \cdot A_g}{3} \\ &= 0.90 \cdot 2.21 \, \text{MPa} \cdot \frac{2 \cdot 59280.00 \, \text{mm}^{2}}{3} \\ &= 78526.87 \, \text{MPa} \cdot \text{mm}^{2} \tag{CSA O86:24 7.5.7.3 b)} \\ \text{where,} \\
+V_r &= \phi \cdot F_v \cdot \frac{2 \cdot A_g}{3} \\ &= 0.90 \cdot 2.10 \, \text{MPa} \cdot \frac{2 \cdot 59280.00 \, \text{mm}^{2}}{3} \\ &= 74787.49 \, \text{MPa} \cdot \text{mm}^{2} \tag{CSA O86:24 7.5.7.3 b)} \\ \text{where,} \\
 \phi &= \text{shear resistance modification factor}  \\
 F_v &= \text{factored strength in shear}  \\
 A_g &= \text{gross cross-sectional area, mm²}  \\ \\ 
@@ -114,19 +118,19 @@ $$
 ## 4. Design Checks
 ### Bending Check
 $$
-\frac{M_f}{M_r} = \frac{8.51}{140.92} = 0.060 \le 1.0 \quad \checkmark
+\frac{M_f}{M_r} = \frac{8.51}{117.13} = 0.073 \le 1.0 \quad \checkmark
 $$
 
 ### Shear Check
 $$
-\frac{V_f}{V_r} = \frac{5.67}{78.53} = 0.072 \le 1.0 \quad \checkmark
+\frac{V_f}{V_r} = \frac{5.67}{74.79} = 0.076 \le 1.0 \quad \checkmark
 $$
 
 ## 5. Summary
-- **Maximum Utilization:** 7.2%
+- **Maximum Utilization:** 7.6%
 - **Design Status:** **PASS**
 
-The $130 \times 456$ mm 20f-E D.Fir-L glulam beam is adequate for the applied loading.
+The $130 \times 456$ mm 20f-E Douglas Fir-Larch glulam beam is adequate for the applied loading.
 
 ---
 *Calculation performed using EIME Engineering Framework*

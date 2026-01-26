@@ -33,7 +33,7 @@ def get_specified_strengths() -> DesignTable:
     - E: Specified modulus of elasticity
     """
     table_path = os.path.join(_current_dir, "CSA O86-24_T7-2.json")
-    return DesignTable.from_json(table_path)
+    return DesignTable.from_file(table_path)
 
 
 def get_service_condition_factors() -> DesignTable:
@@ -54,7 +54,7 @@ def get_service_condition_factors() -> DesignTable:
     - K_SE: Service condition factor for modulus of elasticity
     """
     table_path = os.path.join(_current_dir, "CSA O86-24_T7-3.json")
-    return DesignTable.from_json(table_path)
+    return DesignTable.from_file(table_path)
 
 
 def get_effective_length_factors() -> DesignTable:
@@ -75,7 +75,7 @@ def get_effective_length_factors() -> DesignTable:
     - Fixed-Free
     """
     table_path = os.path.join(_current_dir, "CSA O86-24_TA-4.json")
-    return DesignTable.from_json(table_path)
+    return DesignTable.from_file(table_path)
 
 
 # Cached table instances
