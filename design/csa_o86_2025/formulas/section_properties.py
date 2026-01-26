@@ -34,7 +34,7 @@ def moment_of_inertia(b: float, d: float) -> EngineeringFormula:
             "d": Param("d", desc="depth")
         },
         logic=lambda b, d: b * d**3 / 12,
-        latex_template=lambda b, d: f"\\frac{{{b}}} \\cdot {{{d}}}^3}}{{12}}",
+        latex_template=lambda b, d: f"\\frac{{{b} \\cdot {d}^{{3}}}}{{12}}",
         source="",
         desc="Moment of Inertia"
     )
@@ -68,7 +68,7 @@ def section_modulus(b: float, d: float) -> EngineeringFormula:
             "d": Param("d", desc="depth")
         },
         logic=lambda b, d: b * d**2 / 6,
-        latex_template=lambda b, d: f"\\frac{{{b}}} \\cdot {{{d}}}^2}}{{6}}",
+        latex_template=lambda b, d: f"\\frac{{{b} \\cdot {d}^{{2}}}}{{6}}",
         source="",
         desc="Section Modulus"
     )
