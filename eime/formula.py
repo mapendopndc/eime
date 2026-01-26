@@ -264,6 +264,10 @@ class EngineeringFormula(EngineeringFunction):
         Raises:
             UnitError: If inputs lack proper units or have wrong dimensionality
         """
+        # If already solved, return immediately (idempotent behavior)
+        if self.result is not None:
+            return self
+        
         # Validate inputs
         validated_inputs = {}
         first_quantity = None  # Store first quantity to get registry
@@ -319,7 +323,7 @@ class EngineeringFormula(EngineeringFunction):
                         f"to '{self.result_unit}' (dimensionally incompatible). "
                         f"Falling back to magnitude mode - verify correctness. Error: {str(e)}",
                         UserWarning,
-                        stacklevel=3
+                        stacklevel=2
                     )
                     
                     # Extract magnitudes and wrap with result_unit
