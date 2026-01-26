@@ -40,13 +40,14 @@ def modified_compression_strength(f_c: float, K_D: float, K_H: float, K_Sc: floa
     return create_formula(
         name="F_c",
         params={
-            "f_c": Param("f_c", desc="specified compression strength"),
-            "K_D": Param("K_D", desc="load-duration factor"),
-            "K_H": Param("K_H", desc="system factor"),
-            "K_Sc": Param("K_{{Sc}}", desc="service condition factor"),
-            "K_T": Param("K_T", desc="treatment factor")
+            "f_c": Param("f_c", unit="MPa", desc="specified compression strength"),
+            "K_D": Param("K_D", unit="dimensionless", desc="load-duration factor"),
+            "K_H": Param("K_H", unit="dimensionless", desc="system factor"),
+            "K_Sc": Param("K_{{Sc}}", unit="dimensionless", desc="service condition factor"),
+            "K_T": Param("K_T", unit="dimensionless", desc="treatment factor")
         },
         logic=lambda f_c, K_D, K_H, K_Sc, K_T: f_c * K_D * K_H * K_Sc * K_T,
+        result_unit='MPa',  # Result is in MPa
         latex_template=lambda f_c, K_D, K_H, K_Sc, K_T: f"{f_c} \\cdot {K_D} \\cdot {K_H} \\cdot {K_Sc} \\cdot {K_T}",
         source="CSA O86:24 7.5.8.5",
         desc="Modified Compression Strength"
@@ -82,10 +83,11 @@ def compression_size_factor(Z: float) -> EngineeringFormula:
     return create_formula(
         name="K_{Zcg}",
         params={
-            "Z": Param("Z", desc="member volume, m³")
+            "Z": Param("Z", unit="m^3", desc="member volume, m³")
         },
         logic=lambda Z: 0.68 * Z**(-0.13),
-        latex_template=lambda Z: f"0.68 \\cdot {Z}^{{-0.13}}",
+        result_unit='dimensionless',  # EIME extracts magnitudes, wraps result
+        latex_template=lambda Z: f"0.68 \\cdot \\left({Z}\\right)^{{-0.13}}",
         source="CSA O86:24 7.5.8.5",
         checks=[
             Check.upperbound(1.0, STATUS.FAIL, 301, "Compression size factor must be ≤ 1.0", inclusive=True)
@@ -124,10 +126,11 @@ def compression_slenderness_ratio(L_e: float, w: float) -> EngineeringFormula:
     return create_formula(
         name="C_C",
         params={
-            "L_e": Param("L_e", desc="effective length associated with width"),
-            "w": Param("w", desc="width")
+            "L_e": Param("L_e", unit="mm", desc="effective length associated with width"),
+            "w": Param("w", unit="mm", desc="width")
         },
         logic=lambda L_e, w: L_e / w,
+        result_unit='dimensionless',  # EIME extracts magnitudes, wraps result
         latex_template=lambda L_e, w: f"\\frac{{{L_e}}}{{{w}}}",
         source="CSA O86:24 7.5.8.2",
         desc="Compression Slenderness Ratio"
@@ -170,14 +173,15 @@ def slenderness_factor(F_c: float, K_Zcg: float, C_C: float, E_05: float, K_SE: 
     return create_formula(
         name="K_c",
         params={
-            "F_c": Param("F_c", desc="factored strength in compression"),
-            "K_Zcg": Param("K_{{Zcg}}", desc="compression size factor"),
-            "C_C": Param("C_C", desc="compression slenderness ratio"),
-            "E_05": Param("E_{{05}}", desc="fifth percentile modulus of elasticity"),
-            "K_SE": Param("K_{{SE}}", desc="service condition factor"),
-            "K_T": Param("K_T", desc="treatment factor")
+            "F_c": Param("F_c", unit="MPa", desc="factored strength in compression"),
+            "K_Zcg": Param("K_{{Zcg}}", unit="dimensionless", desc="compression size factor"),
+            "C_C": Param("C_C", unit="dimensionless", desc="compression slenderness ratio"),
+            "E_05": Param("E_{{05}}", unit="MPa", desc="fifth percentile modulus of elasticity"),
+            "K_SE": Param("K_{{SE}}", unit="dimensionless", desc="service condition factor"),
+            "K_T": Param("K_T", unit="dimensionless", desc="treatment factor")
         },
         logic=lambda F_c, K_Zcg, C_C, E_05, K_SE, K_T: 1 / (1 + F_c * K_Zcg * C_C**3 / (35 * E_05 * K_SE * K_T)),
+        result_unit='dimensionless',  # EIME extracts magnitudes, wraps result
         latex_template=lambda F_c, K_Zcg, C_C, E_05, K_SE, K_T: f"\\left[ 1.0 + \\frac{{{F_c} \\cdot {K_Zcg} \\cdot {C_C}^3}}{{35 \\cdot {E_05} \\cdot {K_SE} \\cdot {K_T}}} \\right]^{{-1}}",
         source="CSA O86:24 7.5.8.6",
         desc="Slenderness Factor"
@@ -223,13 +227,14 @@ def compression_resistance(phi: float, F_c: float, A: float, K_Zcg: float, K_C: 
     return create_formula(
         name="P_r",
         params={
-            "phi": Param("\\phi", desc="compression resistance modification factor"),
-            "F_c": Param("F_c", desc="factored strength in compression"),
-            "A": Param("A", desc="cross-sectional area, mm²"),
-            "K_Zcg": Param("K_{{Zcg}}", desc="compression size factor"),
-            "K_C": Param("K_C", desc="compression slenderness factor")
+            "phi": Param("\\phi", unit="dimensionless", desc="compression resistance modification factor"),
+            "F_c": Param("F_c", unit="MPa", desc="factored strength in compression"),
+            "A": Param("A", unit="mm^2", desc="cross-sectional area, mm²"),
+            "K_Zcg": Param("K_{{Zcg}}", unit="dimensionless", desc="compression size factor"),
+            "K_C": Param("K_C", unit="dimensionless", desc="compression slenderness factor")
         },
         logic=lambda phi, F_c, A, K_Zcg, K_C: phi * F_c * A * K_Zcg * K_C,
+        result_unit='N',  # MPa * mm^2 = N
         latex_template=lambda phi, F_c, A, K_Zcg, K_C: f"{phi} \\cdot {F_c} \\cdot {A} \\cdot {K_Zcg} \\cdot {K_C}",
         source="CSA O86:24 7.5.8.5",
         checks=[

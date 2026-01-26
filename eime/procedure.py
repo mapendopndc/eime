@@ -88,6 +88,21 @@ class EngineeringProcedure:
         """
         self.procedure.append(DisplayText(text, level=level))
     
+    def merge(self, other: 'EngineeringProcedure', title: Optional[str] = None, level: int = 2) -> None:
+        """
+        Merge another procedure into this one.
+        
+        Args:
+            other: Procedure to merge
+            title: Optional section title to add before merging
+            level: Heading level for title (default 2)
+        """
+        if title:
+            self.add_title(title, level=level)
+        
+        self.procedure.extend(other.procedure)
+        self.results = pd.concat([self.results, other.results], axis=1)
+    
     def generate_latex(self, index: int = 0) -> str:
         """
         Generate complete LaTeX documentation for the procedure.
@@ -96,15 +111,26 @@ class EngineeringProcedure:
             index: Index for array-like results
             
         Returns:
-            LaTeX string showing complete procedure
+            LaTeX string showing complete procedure with properly separated blocks
         """
-        latex_parts = ["\\begin{align*}"]
+        latex_parts = []
         
         for display_obj in self.procedure:
-            latex_parts.append(display_obj.generate_latex(index))
-            latex_parts.append("\\\\")
-        
-        latex_parts.append("\\end{align*}")
+            # Each formula/check generates its own complete LaTeX block
+            if isinstance(display_obj, DisplayText):
+                # Add display text as markdown header based on level
+                latex_parts.append(f"\n{display_obj.generate_markdown()}\n")
+            elif isinstance(display_obj, EngineeringCheck):
+                # Skip standalone checks - they're already included in formulas
+                continue
+            else:
+                # Add formula description as title if it has one
+                if hasattr(display_obj, 'desc') and display_obj.desc:
+                    latex_parts.append(f"\n**{display_obj.desc}**\n")
+                # Generate LaTeX for formula - this already includes align* wrapper and checks
+                latex_str = display_obj.generate_latex(index)
+                # Wrap in $$ delimiters for proper markdown rendering
+                latex_parts.append(f"$$\n{latex_str}\n$$\n")
         
         return "\n".join(latex_parts)
     

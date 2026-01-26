@@ -4,90 +4,90 @@ Timber Beam Calculator
 High-level calculator for timber beam design using CSA O86-2025.
 """
 
-from eime import SimpleCalculator
-from typing import Dict, Any
+from eime import EngineeringCalculator, EngineeringProcedure
+from typing import Any
+import pandas as pd
 
 
-class TimberBeamCalculator(SimpleCalculator):
+class TimberBeamCalculator(EngineeringCalculator):
     """
     Calculator for timber beam design per CSA O86:24.
     
-    This calculator orchestrates bending, shear, and compression resistance
+    This calculator orchestrates bending and shear resistance
     calculations for glulam timber beams.
     
-    Parameters
-    ----------
-    section_properties : dict
-        Dictionary containing:
-        - b: width (mm)
-        - d: depth (mm)
-        - A: cross-sectional area (mm²)
-    material_properties : dict
-        Dictionary containing:
-        - f_b: specified bending strength (MPa)
-        - f_v: specified shear strength (MPa)
-        - f_c: specified compression strength (MPa)
-        - E: specified modulus of elasticity (MPa)
-    design_parameters : dict
-        Dictionary containing:
-        - phi_b: bending resistance factor
-        - phi_v: shear resistance factor
-        - phi_c: compression resistance factor
-        - K_H: system factor
-        - K_Sb, K_Sv, K_Sc, K_SE: service condition factors
-        - K_T: treatment factor
-        - K_x: curvature factor
-    loading : dict
-        Dictionary containing:
-        - M_f: factored applied moment (kNm)
-        - V_f: factored applied shear (kN)
-        - P_f: factored applied compression (kN)
-        - P_L: long-term load for K_D calculation
-        - P_S: standard-term load for K_D calculation
-        
     Examples
     --------
-    >>> calc = TimberBeamCalculator(
-    ...     section_properties={'b': 130, 'd': 456, 'A': 59280},
-    ...     material_properties={'f_b': 30.8, 'f_v': 2.1, 'f_c': 27.5, 'E': 11700},
-    ...     design_parameters={
-    ...         'phi_b': 0.9, 'phi_v': 0.9, 'phi_c': 0.8,
-    ...         'K_H': 1.0, 'K_Sb': 1.0, 'K_Sv': 1.0, 'K_Sc': 1.0, 'K_SE': 1.0,
-    ...         'K_T': 1.0, 'K_x': 1.0
-    ...     },
-    ...     loading={'M_f': 50, 'V_f': 25, 'P_f': 100, 'P_L': 10, 'P_S': 20}
+    >>> from pint import UnitRegistry
+    >>> ureg = UnitRegistry()
+    >>> 
+    >>> calc = TimberBeamCalculator()
+    >>> results = calc.design(
+    ...     b=130 * ureg.mm,
+    ...     d=456 * ureg.mm,
+    ...     L=6000 * ureg.mm,
+    ...     f_b=30.8 * ureg.MPa,
+    ...     f_v=2.1 * ureg.MPa,
+    ...     M_f=50.5 * ureg.kN * ureg.m,
+    ...     V_f=25.2 * ureg.kN,
+    ...     P_L_percent=44.1,
+    ...     P_S_percent=55.9,
+    ...     K_H=1.0,
+    ...     K_Sb=1.0,
+    ...     K_Sv=1.0,
+    ...     K_T=1.0,
+    ...     K_x=1.0,
+    ...     phi_b=0.9,
+    ...     phi_v=0.9
     ... )
-    >>> results = calc.calculate()
     """
     
-    def __init__(
-        self,
-        section_properties: Dict[str, float],
-        material_properties: Dict[str, float],
-        design_parameters: Dict[str, float],
-        loading: Dict[str, float]
-    ):
+    def __init__(self) -> None:
         super().__init__(name="Timber Beam Calculator")
-        self.section = section_properties
-        self.material = material_properties
-        self.params = design_parameters
-        self.loads = loading
-        
-    def calculate(self) -> Dict[str, Any]:
+    
+    def validate_inputs(self, **inputs: Any) -> None:
         """
-        Perform timber beam design calculations.
+        Validate input parameters.
         
-        Returns
-        -------
-        dict
-            Dictionary containing:
-            - bending_resistance: M_r (kNm)
-            - shear_resistance: V_r (kN)
-            - compression_resistance: P_r (kN)
-            - bending_utilization: M_f / M_r
-            - shear_utilization: V_f / V_r
-            - compression_utilization: P_f / P_r
-            - status: 'PASS' or 'FAIL'
+        Args:
+            **inputs: Named input parameters
+            
+        Raises:
+            ValueError: If required inputs are missing or invalid
+        """
+        required = [
+            'b', 'd', 'L', 'f_b', 'f_v', 'M_f', 'V_f',
+            'P_L_percent', 'P_S_percent', 'K_H', 'K_Sb', 'K_Sv',
+            'K_T', 'K_x', 'phi_b', 'phi_v'
+        ]
+        
+        for param in required:
+            if param not in inputs:
+                raise ValueError(f"Missing required input: {param}")
+    
+    def run_design(self, **inputs: Any) -> EngineeringProcedure:
+        """
+        Execute the beam design calculation.
+        
+        Args:
+            **inputs: Named input parameters including:
+                - b: beam width
+                - d: beam depth
+                - L: beam span
+                - f_b: specified bending strength
+                - f_v: specified shear strength
+                - M_f: factored applied moment
+                - V_f: factored applied shear
+                - P_L_percent: percentage long-term load
+                - P_S_percent: percentage standard-term load
+                - K_H: system factor
+                - K_Sb, K_Sv: service condition factors
+                - K_T: treatment factor
+                - K_x: curvature factor
+                - phi_b, phi_v: resistance factors
+            
+        Returns:
+            EngineeringProcedure with complete design workflow
         """
         from design.csa_o86_2025.formulas import (
             long_duration_factor,
@@ -96,100 +96,72 @@ class TimberBeamCalculator(SimpleCalculator):
             bending_size_factor,
             moment_resistance_a,
             modified_shear_strength,
-            shear_resistance,
-            modified_compression_strength,
-            compression_resistance
+            shear_resistance
         )
+        from design.csa_o86_2025.procedures import (
+            glulam_bending_procedure,
+            glulam_shear_procedure
+        )
+        from eime import EngineeringFunction, DisplayText
         
-        # Calculate K_D (long duration factor)
-        KD = long_duration_factor(self.loads['P_L'], self.loads['P_S'])
-        K_D_value = KD.calculate()
+        # Calculate load duration factor (shared by bending and shear)
+        KD = long_duration_factor(inputs['P_L_percent'], inputs['P_S_percent'])
         
-        # Bending resistance (simplified - assuming fully braced)
+        # Bending calculations - pass formulas directly without extracting values
         Fb = modified_bending_strength(
-            self.material['f_b'],
-            K_D_value,
-            self.params['K_H'],
-            self.params['K_Sb'],
-            self.params['K_T']
+            inputs['f_b'],
+            KD,  # Pass formula directly
+            inputs['K_H'],
+            inputs['K_Sb'],
+            inputs['K_T']
         )
-        F_b_value = Fb.calculate()
         
-        S = section_modulus(self.section['b'], self.section['d'])
-        S_value = S.calculate()
+        S = section_modulus(inputs['b'], inputs['d'])
         
-        KZbg = bending_size_factor(
-            self.section['b'],
-            self.section['d'],
-            self.params.get('L', 5000)  # Default 5m if not provided
-        )
-        K_Zbg_value = KZbg.calculate()
+        KZbg = bending_size_factor(inputs['b'], inputs['d'], inputs['L'])
         
         Mr_a = moment_resistance_a(
-            self.params['phi_b'],
-            F_b_value,
-            S_value,
-            self.params['K_x'],
-            K_Zbg_value
+            inputs['phi_b'],
+            Fb,      # Pass formula directly
+            S,       # Pass formula directly
+            inputs['K_x'],
+            KZbg     # Pass formula directly
         )
-        M_r = Mr_a.calculate() / 1e6  # Convert to kNm
         
-        # Shear resistance
+        # Shear calculations - pass formulas directly without extracting values
         Fv = modified_shear_strength(
-            self.material['f_v'],
-            K_D_value,
-            self.params['K_H'],
-            self.params['K_Sv'],
-            self.params['K_T']
+            inputs['f_v'],
+            KD,  # Pass formula directly (reused)
+            inputs['K_H'],
+            inputs['K_Sv'],
+            inputs['K_T']
         )
-        F_v_value = Fv.calculate()
         
-        Vr = shear_resistance(
-            self.params['phi_v'],
-            F_v_value,
-            self.section['A']
-        )
-        V_r = Vr.calculate() / 1000  # Convert to kN
+        A = inputs['b'] * inputs['d']
+        Vr = shear_resistance(inputs['phi_v'], Fv, A)  # Pass formula directly
         
-        # Compression resistance (simplified - assuming short column)
-        Fc = modified_compression_strength(
-            self.material['f_c'],
-            K_D_value,
-            self.params['K_H'],
-            self.params['K_Sc'],
-            self.params['K_T']
-        )
-        F_c_value = Fc.calculate()
+        # Create and combine procedures
+        procedure = EngineeringProcedure("Timber Beam Design")
         
-        # Simplified - assuming K_Zcg = 1.0 and K_C = 1.0 for short columns
-        Pr = compression_resistance(
-            self.params['phi_c'],
-            F_c_value,
-            self.section['A'],
-            1.0,  # K_Zcg
-            1.0   # K_C
-        )
-        P_r = Pr.calculate() / 1000  # Convert to kN
+        bending_proc = glulam_bending_procedure(KD=KD, Fb=Fb, KZbg=KZbg, S=S, Mr=Mr_a)
+        procedure.merge(bending_proc, title="Bending Resistance", level=3)
         
-        # Calculate utilizations
-        bending_util = self.loads['M_f'] / M_r if M_r > 0 else float('inf')
-        shear_util = self.loads['V_f'] / V_r if V_r > 0 else float('inf')
-        compression_util = self.loads['P_f'] / P_r if P_r > 0 else float('inf')
+        shear_proc = glulam_shear_procedure(Fv=Fv, Vr=Vr)
+        procedure.merge(shear_proc, title="Shear Resistance", level=3)
         
-        # Determine overall status
-        max_util = max(bending_util, shear_util, compression_util)
-        status = 'PASS' if max_util <= 1.0 else 'FAIL'
+        return procedure
+    
+    def format_results(self, procedure: EngineeringProcedure) -> pd.DataFrame:
+        """
+        Format procedure results for output.
         
-        return {
-            'bending_resistance_kNm': M_r,
-            'shear_resistance_kN': V_r,
-            'compression_resistance_kN': P_r,
-            'bending_utilization': bending_util,
-            'shear_utilization': shear_util,
-            'compression_utilization': compression_util,
-            'max_utilization': max_util,
-            'status': status
-        }
+        Args:
+            procedure: Completed design procedure
+            
+        Returns:
+            DataFrame with formatted results
+        """
+        return procedure.summary()
 
 
 __all__ = ["TimberBeamCalculator"]

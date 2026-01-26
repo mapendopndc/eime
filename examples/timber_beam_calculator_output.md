@@ -1,5 +1,5 @@
 # Timber Beam Design Calculation
-## Simply Supported Glulam Beam - CSA O86:24
+## Calculator Approach - CSA O86:24
 *Calculation Date: January 26, 2026*
 
 ---
@@ -9,7 +9,7 @@
 - Beam spacing: $s = 400.0$ mm
 - Section: $130 \times 456$ mm
 
-### Material Properties (20f-E D.Fir-L)
+### Material Properties
 - Species: Douglas Fir-Larch
 - Grade: 20f-E
 - Specified bending strength: $f_b = 25.6$ MPa
@@ -27,24 +27,29 @@
 For a simply supported beam:
 $$
 \begin{align}
-M_f &= \frac{w_f L^2}{8} = \frac{1.890 \times 6.0^2}{8} = 8.51 \text{ kNm} \\
-V_f &= \frac{w_f L}{2} = \frac{1.890 \times 6.0}{2} = 5.67 \text{ kN}
+M_f &= \frac{w_f L^2}{8} = 8.51 \text{ kNm} \\
+V_f &= \frac{w_f L}{2} = 5.67 \text{ kN}
 \end{align}
 $$
 
 ## 3. Resistance Calculations
 
-### Load Duration Factor
+
+### Bending Resistance
+
+
+**Long Duration Factor**
 
 $$
 \begin{align*}
 K_D &= 1.0 - 0.50 \log_{10}(P_L/P_S) \ge 0.65 \\ &= 1.0 - 0.50 \log_{10}(44.12/55.88) \ge 0.65 \\ &= 1.05 \tag{CSA O86:24 cl.5.3.2.2} \\ \text{where,} \\
 P_L &= \text{specified long-term load}  \\
-P_S &= \text{specified standard-term load}  \\ \\ 
+P_S &= \text{specified standard-term load}
 \end{align*}
 $$
 
-### Modified Bending Strength
+
+**Modified Bending Strength**
 
 $$
 \begin{align*}
@@ -53,21 +58,12 @@ f_b &= \text{specified bending strength}  \\
 K_D &= \text{load-duration factor}  \\
 K_H &= \text{system factor}  \\
 K_{{Sb}} &= \text{service condition factor}  \\
-K_T &= \text{treatment factor}  \\ \\ 
+K_T &= \text{treatment factor}
 \end{align*}
 $$
 
-### Section Modulus
 
-$$
-\begin{align*}
-S &= \frac{b \cdot d^{2}}{6} \\ &= \frac{130.00 \, \text{mm} \cdot 456.00 \, \text{mm}^{2}}{6} \\ &= 4505280.00 \, \text{mm}^{3}  \\ \text{where,} \\
-b &= \text{width}  \\
-d &= \text{depth}  \\ \\ 
-\end{align*}
-$$
-
-### Bending Size Factor
+**Bending Size Factor**
 
 $$
 \begin{align*}
@@ -78,7 +74,19 @@ L &= \text{length}  \\ \\ K_{Zbg} \leq 1.3&= 1.07 \leq 1.30 \\ \text{Check} &= \
 \end{align*}
 $$
 
-### Moment Resistance (Method A)
+
+**Section Modulus**
+
+$$
+\begin{align*}
+S &= \frac{b \cdot d^{2}}{6} \\ &= \frac{130.00 \, \text{mm} \cdot 456.00 \, \text{mm}^{2}}{6} \\ &= 4505280.00 \, \text{mm}^{3}  \\ \text{where,} \\
+b &= \text{width}  \\
+d &= \text{depth}
+\end{align*}
+$$
+
+
+**Moment Resistance a)**
 
 $$
 \begin{align*}
@@ -87,11 +95,15 @@ M_{r,a} &= \phi \cdot F_b \cdot S \cdot K_x \cdot K_{{Zbg}} \\ &= 0.90 \cdot 26.
 F_b &= \text{modified bending strength}  \\
 S &= \text{section modulus}  \\
 K_x &= \text{curvature factor}  \\
-K_{{Zbg}} &= \text{size factor}  \\ \\ 
+K_{{Zbg}} &= \text{size factor}
 \end{align*}
 $$
 
-### Modified Shear Strength
+
+### Shear Resistance
+
+
+**Modified Shear Strength**
 
 $$
 \begin{align*}
@@ -100,18 +112,19 @@ f_v &= \text{specified shear strength}  \\
 K_D &= \text{load-duration factor}  \\
 K_H &= \text{system factor}  \\
 K_{{Sv}} &= \text{service condition factor}  \\
-K_T &= \text{treatment factor}  \\ \\ 
+K_T &= \text{treatment factor}
 \end{align*}
 $$
 
-### Shear Resistance
+
+**Shear Resistance**
 
 $$
 \begin{align*}
-V_r &= \phi \cdot F_v \cdot \frac{2 \cdot A_g}{3} \\ &= 0.90 \cdot 2.10 \, \text{MPa} \cdot \frac{2 \cdot 59280.00 \, \text{mm}^{2}}{3} \\ &= 74787.49 \, \text{MPa} \cdot \text{mm}^{2} \tag{CSA O86:24 7.5.7.3 b)} \\ \text{where,} \\
+V_r &= \phi \cdot F_v \cdot \frac{2 \cdot A_g}{3} \\ &= 0.90 \cdot 2.10 \, \text{MPa} \cdot \frac{2 \cdot 59280.00 \, \text{mm}^{2}}{3} \\ &= 74787.49 \, \text{N} \tag{CSA O86:24 7.5.7.3 b)} \\ \text{where,} \\
 \phi &= \text{shear resistance modification factor}  \\
 F_v &= \text{factored strength in shear}  \\
-A_g &= \text{gross cross-sectional area, mm²}  \\ \\ 
+A_g &= \text{gross cross-sectional area, mm²}
 \end{align*}
 $$
 
@@ -133,4 +146,4 @@ $$
 The $130 \times 456$ mm 20f-E Douglas Fir-Larch glulam beam is adequate for the applied loading.
 
 ---
-*Calculation performed using EIME Engineering Framework*
+*Calculation performed using EIME TimberBeamCalculator*

@@ -143,17 +143,23 @@ class EngineeringFunction(ABC):
             index: Index for array-like results
             
         Returns:
-            Complete LaTeX string with formula, params, and checks
+            Complete LaTeX string with formula, params, and checks wrapped in align*
         """
         content = self.generate_function_latex(index) + " \\\\ "
         
         param_latex = self.generate_param_latex()
         if param_latex:
-            content += param_latex + " \\\\ "
+            content += param_latex
+            # Remove trailing space and add line break only if we have more content
         
         checks_latex = self.generate_checks_latex(index)
         if checks_latex:
+            if param_latex:
+                content += " \\\\ "
             content += checks_latex
+        else:
+            # Remove trailing \\ if no checks
+            content = content.rstrip(" \\\\ ")
         
         return LaTeXFormatter.wrap_align(content)
     
@@ -570,7 +576,13 @@ class FormulaWrapper:
     def __init__(self, func: Callable) -> None:
         """Initialize wrapper."""
         self._func = func
-        update_wrapper(self, func)
+        # Preserve function metadata including docstring
+        self.__doc__ = func.__doc__
+        self.__name__ = func.__name__
+        self.__module__ = func.__module__
+        self.__qualname__ = func.__qualname__
+        self.__annotations__ = func.__annotations__
+        self.__wrapped__ = func
     
     def __call__(self, *args, **kwargs) -> EngineeringFunction:
         """Execute the wrapped function."""
@@ -592,7 +604,7 @@ class FormulaWrapper:
         return f"<Formula: {self._func.__name__}>"
 
 
-def formula(func: Callable) -> FormulaWrapper:
+def formula(func: Callable) -> Callable:
     """
     Decorator for creating formula functions.
     
@@ -612,7 +624,7 @@ def formula(func: Callable) -> FormulaWrapper:
     Returns:
         Wrapped function that auto-executes the formula
     """
-    return wraps(func)(FormulaWrapper(func))
+    return FormulaWrapper(func)
 
 
 def create_formula(

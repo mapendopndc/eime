@@ -220,12 +220,13 @@ def shear_resistance(phi: float, F_v: float, A_g: float, V_f: float = None) -> E
     return create_formula(
         name="V_r",
         params={
-            "phi": Param("\phi", unit="dimensionless", desc="shear resistance modification factor"),
+            "phi": Param(r"\phi", unit="dimensionless", desc="shear resistance modification factor"),
             "F_v": Param("F_v", unit="MPa", desc="factored strength in shear"),
             "A_g": Param("A_g", unit="mm**2", desc="gross cross-sectional area, mm²")
         },
         logic=lambda phi, F_v, A_g: phi * F_v * 2 * A_g / 3,
         latex_template=lambda phi, F_v, A_g: f"{phi} \\cdot {F_v} \\cdot \\frac{{2 \\cdot {A_g}}}{{3}}",
+        result_unit='N',  # MPa * mm^2 = N
         source="CSA O86:24 7.5.7.3 b)",
         checks=[
             Check.lowerbound(V_f, STATUS.FAIL, 201, "Factored force exceeds resistance.")
