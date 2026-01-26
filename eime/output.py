@@ -9,18 +9,34 @@ from typing import Any, Dict, List, Optional, Union
 import numpy as np
 import pandas as pd
 
+# Import unit handling utilities
+try:
+    from .units import is_quantity, get_compact_unit_string, extract_magnitude
+except ImportError:
+    # Fallback if units module not available
+    def is_quantity(value):
+        return False
+    def get_compact_unit_string(value):
+        return ""
+    def extract_magnitude(value, target_unit=None):
+        return value
+
 
 class Param:
     """
     Parameter definition for engineering formulas.
     
     A parameter represents an input to a formula with its LaTeX symbol,
-    description, and optional source reference.
+    description, expected unit, and optional source reference.
+    
+    All parameters MUST specify a unit for dimensional validation.
+    Use 'dimensionless' for unitless parameters.
     """
     
     def __init__(
         self,
         latex: str,
+        unit: str,
         val: Optional[Any] = None,
         desc: str = "",
         src: str = ""
@@ -30,17 +46,19 @@ class Param:
         
         Args:
             latex: LaTeX symbol for this parameter (e.g., "f_c", "E")
-            val: Value of the parameter (optional)
+            unit: Expected unit string (e.g., 'mm', 'MPa', 'dimensionless')
+            val: Value of the parameter (optional, must be a Pint Quantity)
             desc: Human-readable description
             src: Source reference (e.g., code clause, table reference)
         """
         self.latex = latex
+        self.unit = unit
         self.val = val
         self.desc = desc
         self.src = src
     
     def __repr__(self) -> str:
-        return f"Param({self.latex}, val={self.val}, desc='{self.desc}')"
+        return f"Param({self.latex}, unit={self.unit}, val={self.val}, desc='{self.desc}')"
 
 
 class LaTeXFormatter:
@@ -51,14 +69,56 @@ class LaTeXFormatter:
         """
         Format a value for LaTeX display.
         
+        Handles Pint Quantities by extracting magnitude and unit.
+        
         Args:
-            value: Value to format (scalar, array, Series, or formula)
+            value: Value to format (scalar, array, Series, Quantity, or formula)
             index: Index to extract if value is array-like
             precision: Number of decimal places
             
         Returns:
-            Formatted LaTeX string
+            Formatted LaTeX string with units if applicable
         """
+        # Handle Pint Quantities
+        if is_quantity(value):
+            # Extract magnitude for the specific index
+            magnitude = value.magnitude
+            if isinstance(magnitude, pd.Series):
+                num_val = float(magnitude.iloc[index])
+            elif isinstance(magnitude, np.ndarray):
+                num_val = float(magnitude[index])
+            else:
+                num_val = float(magnitude)
+            
+            # Get compact unit string
+            unit_str = get_compact_unit_string(value)
+            
+            # Format with units
+            if unit_str and unit_str != 'dimensionless':
+                # Split unit string into parts before and after superscript to handle LaTeX properly
+                import re
+                # Check if there's a superscript or multiplication
+                if '^' in unit_str or '\\cdot' in unit_str:
+                    # Split by \cdot to handle each unit separately
+                    parts = unit_str.split(' \\cdot ')
+                    formatted_parts = []
+                    for part in parts:
+                        part = part.strip()
+                        # Match unit name with optional superscript
+                        match = re.match(r'^([a-zA-Z]+)(\^\{\d+\})?$', part)
+                        if match:
+                            unit_name, superscript = match.groups()
+                            formatted_parts.append(f'\\text{{{unit_name}}}{superscript if superscript else ""}')
+                        else:
+                            # Keep as-is if no match (shouldn't happen normally)
+                            formatted_parts.append(part)
+                    formatted_unit = ' \\cdot '.join(formatted_parts)
+                    return f"{num_val:.{precision}f} \\, {formatted_unit}"
+                else:
+                    return f"{num_val:.{precision}f} \\, \\text{{{unit_str}}}"
+            else:
+                return f"{num_val:.{precision}f}"
+        
         # Extract single value from various types
         if isinstance(value, (float, int)):
             num_val = float(value)
@@ -75,7 +135,7 @@ class LaTeXFormatter:
             else:
                 num_val = float(value)
         
-        # Format the number
+        # Format the number (no units for non-Quantity values)
         return f"{num_val:.{precision}f}"
     
     @staticmethod

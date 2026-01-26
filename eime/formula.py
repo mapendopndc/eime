@@ -15,6 +15,13 @@ import pandas as pd
 
 from .checks import EngineeringCheck, InvalidResult, STATUS
 from .output import Param, LaTeXFormatter
+from .units import (
+    is_quantity,
+    validate_quantity,
+    extract_magnitude,
+    make_quantity,
+    UnitError
+)
 
 
 class EngineeringFunction(ABC):
@@ -208,7 +215,8 @@ class EngineeringFormula(EngineeringFunction):
         source: str = "",
         checks: Optional[List[EngineeringCheck]] = None,
         desc: str = "",
-        comments: Optional[str] = None
+        comments: Optional[str] = None,
+        result_unit: Optional[str] = None
     ) -> None:
         """
         Initialize an engineering formula.
@@ -222,6 +230,9 @@ class EngineeringFormula(EngineeringFunction):
             checks: List of checks to apply
             desc: Description of the formula
             comments: Additional comments
+            result_unit: Optional unit for result. If specified, formula logic receives
+                        magnitudes (floats) instead of Quantities, and result is wrapped
+                        with this unit. Use for formulas with complex unit handling.
         """
         super().__init__(name, checks, desc)
         self.params = params
@@ -230,18 +241,105 @@ class EngineeringFormula(EngineeringFunction):
         self.source = source
         self.comments = comments
         self.substitutions: List[EngineeringFunction] = []
-        self.result_units: Optional[str] = None
+        self.result_unit = result_unit
+        self.result_units: Optional[str] = None  # For display (legacy)
     
     def solve(self) -> EngineeringFormula:
-        """Execute the formula calculation."""
-        # Track substitutions (when inputs are other formulas)
+        """
+        Execute the formula calculation with unit validation.
+        
+        Validates that all inputs are Pint Quantities with correct dimensionality.
+        
+        If result_unit is specified:
+          - Extracts magnitudes from inputs (formula receives floats)
+          - Wraps result with specified unit
+          
+        If result_unit is NOT specified:
+          - Passes Quantities to formula (Pint handles unit propagation)
+          - Result must be a Quantity
+        
+        Returns:
+            Self for method chaining
+            
+        Raises:
+            UnitError: If inputs lack proper units or have wrong dimensionality
+        """
+        # Validate inputs
+        validated_inputs = {}
+        first_quantity = None  # Store first quantity to get registry
+        
         for key, value in self.inputs.items():
+            # Handle formula substitutions
             if isinstance(value, EngineeringFunction):
                 self.substitutions.append(value)
-                self.inputs[key] = value.result
+                value = value.result
+                self.inputs[key] = value
+            
+            # Validate that input is a Quantity with proper units
+            if key in self.params:
+                param = self.params[key]
+                validate_quantity(value, key, param.unit)
+                
+                # Store first quantity for registry access
+                if first_quantity is None:
+                    first_quantity = value
+                
+                # Store for calculation
+                validated_inputs[key] = value
+            else:
+                # Parameter not defined - this shouldn't happen in strict mode
+                raise ValueError(
+                    f"Input '{key}' is not defined in formula parameters. "
+                    f"Valid parameters: {list(self.params.keys())}"
+                )
         
-        # Execute calculation
-        self.result = self.logic(**self.inputs)
+        # Execute calculation based on result_unit setting
+        try:
+            # Always perform calculation with Pint Quantities for unit propagation
+            result = self.logic(**validated_inputs)
+            
+            # Validate result is a Quantity
+            if not is_quantity(result):
+                raise UnitError(
+                    f"Formula '{self.name}' must return a Pint Quantity. "
+                    f"Ensure the calculation function returns a Quantity object."
+                )
+            
+            # If result_unit specified, try to convert result
+            if self.result_unit is not None:
+                try:
+                    # Try converting the Pint result to the desired unit
+                    self.result = result.to(self.result_unit)
+                except Exception as e:
+                    # Conversion failed - units are incompatible
+                    # Fall back to magnitude mode with warning
+                    import warnings
+                    warnings.warn(
+                        f"Formula '{self.name}': Cannot convert result units '{result.units}' "
+                        f"to '{self.result_unit}' (dimensionally incompatible). "
+                        f"Falling back to magnitude mode - verify correctness. Error: {str(e)}",
+                        UserWarning,
+                        stacklevel=3
+                    )
+                    
+                    # Extract magnitudes and wrap with result_unit
+                    magnitude_inputs = {}
+                    for key, value in validated_inputs.items():
+                        param = self.params[key]
+                        magnitude_inputs[key] = extract_magnitude(value, param.unit)
+                    
+                    result_magnitude = self.logic(**magnitude_inputs)
+                    ureg = result._REGISTRY
+                    self.result = result_magnitude * ureg(self.result_unit)
+            else:
+                # No unit conversion requested, use natural result
+                self.result = result
+                
+        except Exception as e:
+            raise RuntimeError(
+                f"Error executing formula '{self.name}': {str(e)}\n"
+                f"Inputs: {validated_inputs}"
+            ) from e
         
         return self
     
@@ -261,7 +359,7 @@ class EngineeringFormula(EngineeringFunction):
         
         substituted_formula = self.latex_template(*substitutions)
         
-        # Format result
+        # Format result (result_unit already handled conversion if specified)
         result_str = LaTeXFormatter.format_value(self.result, index)
         
         # Add source tag if provided
@@ -521,7 +619,8 @@ def create_formula(
     source: str = "",
     checks: Optional[List[EngineeringCheck]] = None,
     desc: str = "",
-    comments: Optional[str] = None
+    comments: Optional[str] = None,
+    result_unit: Optional[str] = None
 ) -> EngineeringFormula:
     """
     Factory function for creating formulas.
@@ -537,6 +636,9 @@ def create_formula(
         checks: Checks to apply
         desc: Description
         comments: Additional comments
+        result_unit: Optional unit for result. If specified, formula logic receives
+                    magnitudes (floats) instead of Quantities, and result is wrapped
+                    with this unit. Use for formulas with complex unit handling.
         
     Returns:
         EngineeringFormula instance
@@ -549,7 +651,8 @@ def create_formula(
         source=source,
         checks=checks if checks else [],
         desc=desc,
-        comments=comments
+        comments=comments,
+        result_unit=result_unit
     )
 
 

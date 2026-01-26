@@ -44,7 +44,7 @@ $$
 
 $$
 \begin{align*}
-F_b &= f_b \cdot K_D \cdot K_H \cdot K_{{Sb}} \cdot K_T \\ &= 30.80 \cdot 1.05 \cdot 1.00 \cdot 1.00 \cdot 1.00 \\ &= 32.38 \tag{CSA O86:24 7.5.6.6.1} \\ \text{where,} \\
+F_b &= f_b \cdot K_D \cdot K_H \cdot K_{{Sb}} \cdot K_T \\ &= 30.80 \, \text{MPa} \cdot 1.05 \cdot 1.00 \cdot 1.00 \cdot 1.00 \\ &= 32.38 \, \text{MPa} \tag{CSA O86:24 7.5.6.6.1} \\ \text{where,} \\
 f_b &= \text{specified bending strength}  \\
 K_D &= \text{load-duration factor}  \\
 K_H &= \text{system factor}  \\
@@ -57,7 +57,7 @@ $$
 
 $$
 \begin{align*}
-S &= \frac{b \cdot d^{2}}{6} \\ &= \frac{130.00 \cdot 456.00^{2}}{6} \\ &= 4505280.00  \\ \text{where,} \\
+S &= \frac{b \cdot d^{2}}{6} \\ &= \frac{130.00 \, \text{mm} \cdot 456.00 \, \text{mm}^{2}}{6} \\ &= 4505280.00 \, \text{mm}^{3}  \\ \text{where,} \\
 b &= \text{width}  \\
 d &= \text{depth}  \\ \\ 
 \end{align*}
@@ -67,7 +67,7 @@ $$
 
 $$
 \begin{align*}
-K_{Zbg} &= \left(\frac{130}{b}\right)^{0.1} \left(\frac{610}{d}\right)^{0.1} \left(\frac{9100}{L}\right)^{0.1} \\ &= \left(\frac{130}{130.00}\right)^{0.1} \left(\frac{610}{456.00}\right)^{0.1} \left(\frac{9100}{6000.00}\right)^{0.1} \\ &= 1.07 \tag{CSA O86:24 7.5.6.6.1} \\ \text{where,} \\
+K_{Zbg} &= \left(\frac{130}{b}\right)^{0.1} \left(\frac{610}{d}\right)^{0.1} \left(\frac{9100}{L}\right)^{0.1} \\ &= \left(\frac{130}{130.00 \, \text{mm}}\right)^{0.1} \left(\frac{610}{456.00 \, \text{mm}}\right)^{0.1} \left(\frac{9100}{6000.00 \, \text{mm}}\right)^{0.1} \\ &= 1.07 \tag{CSA O86:24 7.5.6.6.1} \\ \text{where,} \\
 b &= \text{width}  \\
 d &= \text{depth}  \\
 L &= \text{length}  \\ \\ K_{Zbg} \leq 1.3&= 1.07 \leq 1.30 \\ \text{Check} &= \text{Pass}
@@ -78,7 +78,7 @@ $$
 
 $$
 \begin{align*}
-M_{r,a} &= \phi \cdot F_b \cdot S \cdot K_x \cdot K_{{Zbg}} \\ &= 0.90 \cdot 32.38 \cdot 4505280.00 \cdot 1.00 \cdot 1.07 \\ &= 140922411.92 \tag{CSA O86:24 7.5.6.6.1 a)} \\ \text{where,} \\
+M_{r,a} &= \phi \cdot F_b \cdot S \cdot K_x \cdot K_{{Zbg}} \\ &= 0.90 \cdot 32.38 \, \text{MPa} \cdot 4505280.00 \, \text{mm}^{3} \cdot 1.00 \cdot 1.07 \\ &= 140.92 \, \text{kN} \cdot \text{m} \tag{CSA O86:24 7.5.6.6.1 a)} \\ \text{where,} \\
 \phi &= \text{resistance factor}  \\
 F_b &= \text{modified bending strength}  \\
 S &= \text{section modulus}  \\
@@ -91,7 +91,7 @@ $$
 
 $$
 \begin{align*}
-F_v &= f_v \cdot K_D \cdot K_H \cdot K_{{Sv}} \cdot K_T \\ &= 2.10 \cdot 1.05 \cdot 1.00 \cdot 1.00 \cdot 1.00 \\ &= 2.21 \tag{CSA O86:24 7.5.7.3 b)} \\ \text{where,} \\
+F_v &= f_v \cdot K_D \cdot K_H \cdot K_{{Sv}} \cdot K_T \\ &= 2.10 \, \text{MPa} \cdot 1.05 \cdot 1.00 \cdot 1.00 \cdot 1.00 \\ &= 2.21 \, \text{MPa} \tag{CSA O86:24 7.5.7.3 b)} \\ \text{where,} \\
 f_v &= \text{specified shear strength}  \\
 K_D &= \text{load-duration factor}  \\
 K_H &= \text{system factor}  \\
@@ -104,7 +104,7 @@ $$
 
 $$
 \begin{align*}
-V_r &= \phi \cdot F_v \cdot \frac{2 \cdot A_g}{3} \\ &= 0.90 \cdot 2.21 \cdot \frac{2 \cdot 59280.00}{3} \\ &= 78526.87 \tag{CSA O86:24 7.5.7.3 b)} \\ \text{where,} \\
+V_r &= \phi \cdot F_v \cdot \frac{2 \cdot A_g}{3} \\ &= 0.90 \cdot 2.21 \, \text{MPa} \cdot \frac{2 \cdot 59280.00 \, \text{mm}^{2}}{3} \\ &= 78526.87 \, \text{MPa} \cdot \text{mm}^{2} \tag{CSA O86:24 7.5.7.3 b)} \\ \text{where,} \\
 \phi &= \text{shear resistance modification factor}  \\
 F_v &= \text{factored strength in shear}  \\
 A_g &= \text{gross cross-sectional area, mm²}  \\ \\ 

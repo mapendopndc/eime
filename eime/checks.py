@@ -12,6 +12,15 @@ from typing import Any, Optional, Union
 import numpy as np
 import pandas as pd
 
+# Import unit handling
+try:
+    from .units import is_quantity, extract_magnitude
+except ImportError:
+    def is_quantity(value):
+        return False
+    def extract_magnitude(value, target_unit=None):
+        return value
+
 
 class STATUS(IntEnum):
     """Status codes for engineering checks."""
@@ -109,7 +118,20 @@ class EngineeringCheck(ABC):
         pass
     
     def _get_single_value(self, value: Any, index: int) -> float:
-        """Extract a single value from various data types."""
+        """Extract a single value from various data types, including Pint Quantities."""
+        # Handle Pint Quantities first
+        if is_quantity(value):
+            magnitude = value.magnitude
+            if isinstance(magnitude, (float, int)):
+                return float(magnitude)
+            elif isinstance(magnitude, pd.Series):
+                return float(magnitude.iloc[index])
+            elif isinstance(magnitude, np.ndarray):
+                return float(magnitude[index])
+            else:
+                return float(magnitude)
+        
+        # Handle standard types
         if isinstance(value, (float, int)):
             return float(value)
         elif isinstance(value, pd.Series):
@@ -152,13 +174,22 @@ class Upperbound(EngineeringCheck):
     
     def check(self) -> EngineeringCheck:
         """Evaluate upper bound check."""
-        # Ensure result is numeric array
-        result = np.array(self.formula.result, dtype=float)
+        # Extract magnitude from result (handle Quantities)
+        if is_quantity(self.formula.result):
+            result = np.array(extract_magnitude(self.formula.result), dtype=float)
+        else:
+            result = np.array(self.formula.result, dtype=float)
         
-        # Extract bound value (may be from another formula)
+        # Extract bound value (may be from another formula or a Quantity)
         from .formula import EngineeringFunction
         if isinstance(self.upperbound, EngineeringFunction):
-            bound_value = np.array(self.upperbound.result, dtype=float)
+            bound_result = self.upperbound.result
+            if is_quantity(bound_result):
+                bound_value = np.array(extract_magnitude(bound_result), dtype=float)
+            else:
+                bound_value = np.array(bound_result, dtype=float)
+        elif is_quantity(self.upperbound):
+            bound_value = np.array(extract_magnitude(self.upperbound), dtype=float)
         else:
             bound_value = self.upperbound
         
@@ -240,13 +271,22 @@ class Lowerbound(EngineeringCheck):
     
     def check(self) -> EngineeringCheck:
         """Evaluate lower bound check."""
-        # Ensure result is numeric array
-        result = np.array(self.formula.result, dtype=float)
+        # Extract magnitude from result (handle Quantities)
+        if is_quantity(self.formula.result):
+            result = np.array(extract_magnitude(self.formula.result), dtype=float)
+        else:
+            result = np.array(self.formula.result, dtype=float)
         
-        # Extract bound value
+        # Extract bound value (may be from another formula or a Quantity)
         from .formula import EngineeringFunction
         if isinstance(self.lowerbound, EngineeringFunction):
-            bound_value = np.array(self.lowerbound.result, dtype=float)
+            bound_result = self.lowerbound.result
+            if is_quantity(bound_result):
+                bound_value = np.array(extract_magnitude(bound_result), dtype=float)
+            else:
+                bound_value = np.array(bound_result, dtype=float)
+        elif is_quantity(self.lowerbound):
+            bound_value = np.array(extract_magnitude(self.lowerbound), dtype=float)
         else:
             bound_value = self.lowerbound
         
@@ -400,7 +440,12 @@ class InvalidResult(EngineeringCheck):
     
     def check(self) -> EngineeringCheck:
         """Check for NaN or Inf values."""
-        result = np.array(self.formula.result, dtype=float)
+        # Extract magnitude from result (handle Quantities)
+        if is_quantity(self.formula.result):
+            result = np.array(extract_magnitude(self.formula.result), dtype=float)
+        else:
+            result = np.array(self.formula.result, dtype=float)
+        
         invalid = np.isnan(result) | np.isinf(result)
         
         self.applied_check_ids = np.where(invalid, self.check_id, None)

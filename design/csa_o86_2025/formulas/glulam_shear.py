@@ -125,11 +125,11 @@ def modified_shear_strength(f_v: float, K_D: float, K_H: float, K_Sv: float, K_T
     return create_formula(
         name="F_v",
         params={
-            "f_v": Param("f_v", desc="specified shear strength"),
-            "K_D": Param("K_D", desc="load-duration factor"),
-            "K_H": Param("K_H", desc="system factor"),
-            "K_Sv": Param("K_{{Sv}}", desc="service condition factor"),
-            "K_T": Param("K_T", desc="treatment factor")
+            "f_v": Param("f_v", unit="MPa", desc="specified shear strength"),
+            "K_D": Param("K_D", unit="dimensionless", desc="load-duration factor"),
+            "K_H": Param("K_H", unit="dimensionless", desc="system factor"),
+            "K_Sv": Param("K_{{Sv}}", unit="dimensionless", desc="service condition factor"),
+            "K_T": Param("K_T", unit="dimensionless", desc="treatment factor")
         },
         logic=lambda f_v, K_D, K_H, K_Sv, K_T: f_v * K_D * K_H * K_Sv * K_T,
         latex_template=lambda f_v, K_D, K_H, K_Sv, K_T: f"{f_v} \\cdot {K_D} \\cdot {K_H} \\cdot {K_Sv} \\cdot {K_T}",
@@ -220,9 +220,9 @@ def shear_resistance(phi: float, F_v: float, A_g: float, V_f: float = None) -> E
     return create_formula(
         name="V_r",
         params={
-            "phi": Param("\\phi", desc="shear resistance modification factor"),
-            "F_v": Param("F_v", desc="factored strength in shear"),
-            "A_g": Param("A_g", desc="gross cross-sectional area, mm²")
+            "phi": Param("\phi", unit="dimensionless", desc="shear resistance modification factor"),
+            "F_v": Param("F_v", unit="MPa", desc="factored strength in shear"),
+            "A_g": Param("A_g", unit="mm**2", desc="gross cross-sectional area, mm²")
         },
         logic=lambda phi, F_v, A_g: phi * F_v * 2 * A_g / 3,
         latex_template=lambda phi, F_v, A_g: f"{phi} \\cdot {F_v} \\cdot \\frac{{2 \\cdot {A_g}}}{{3}}",

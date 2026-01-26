@@ -42,8 +42,8 @@ def long_duration_factor(P_L: float, P_S: float) -> EngineeringFormula:
     return create_formula(
         name="K_D",
         params={
-            "P_L": Param("P_L", desc="specified long-term load"),
-            "P_S": Param("P_S", desc="specified standard-term load")
+            "P_L": Param("P_L", unit="dimensionless", desc="specified long-term load"),
+            "P_S": Param("P_S", unit="dimensionless", desc="specified standard-term load")
         },
         logic=lambda P_L, P_S: np.maximum(1.0 - 0.50 * np.log10(np.abs(P_L/P_S)), 0.65),
         latex_template=lambda P_L, P_S: f"1.0 - 0.50 \\log_{{10}}({P_L}/{P_S}) \\ge 0.65",
@@ -86,11 +86,11 @@ def modified_bending_strength(f_b: float, K_D: float, K_H: float, K_Sb: float, K
     return create_formula(
         name="F_b",
         params={
-            "f_b": Param("f_b", desc="specified bending strength"),
-            "K_D": Param("K_D", desc="load-duration factor"),
-            "K_H": Param("K_H", desc="system factor"),
-            "K_Sb": Param("K_{{Sb}}", desc="service condition factor"),
-            "K_T": Param("K_T", desc="treatment factor")
+            "f_b": Param("f_b", unit="MPa", desc="specified bending strength"),
+            "K_D": Param("K_D", unit="dimensionless", desc="load-duration factor"),
+            "K_H": Param("K_H", unit="dimensionless", desc="system factor"),
+            "K_Sb": Param("K_{{Sb}}", unit="dimensionless", desc="service condition factor"),
+            "K_T": Param("K_T", unit="dimensionless", desc="treatment factor")
         },
         logic=lambda f_b, K_D, K_H, K_Sb, K_T: f_b * K_D * K_H * K_Sb * K_T,
         latex_template=lambda f_b, K_D, K_H, K_Sb, K_T: f"{f_b} \\cdot {K_D} \\cdot {K_H} \\cdot {K_Sb} \\cdot {K_T}",
@@ -134,11 +134,12 @@ def bending_size_factor(b: float, d: float, L: float) -> EngineeringFormula:
     return create_formula(
         name="K_{Zbg}",
         params={
-            "b": Param("b", desc="width"),
-            "d": Param("d", desc="depth"),
-            "L": Param("L", desc="length")
+            "b": Param("b", unit="mm", desc="width"),
+            "d": Param("d", unit="mm", desc="depth"),
+            "L": Param("L", unit="mm", desc="length")
         },
         logic=lambda b, d, L: (130/b)**0.1 * (610/d)**0.1 * (9100/L)**0.1,
+        result_unit='dimensionless',  # EIME extracts magnitudes, wraps result
         latex_template=lambda b, d, L: f"\\left(\\frac{{130}}{{{b}}}\\right)^{{0.1}} \\left(\\frac{{610}}{{{d}}}\\right)^{{0.1}} \\left(\\frac{{9100}}{{{L}}}\\right)^{{0.1}}",
         source="CSA O86:24 7.5.6.6.1",
         checks=[
@@ -399,15 +400,16 @@ def moment_resistance_a(phi: float, F_b: float, S: float, K_x: float, K_Zbg: flo
     return create_formula(
         name="M_{r,a}",
         params={
-            "phi": Param("\\phi", desc="resistance factor"),
-            "F_b": Param("F_b", desc="modified bending strength"),
-            "S": Param("S", desc="section modulus"),
-            "K_x": Param("K_x", desc="curvature factor"),
-            "K_Zbg": Param("K_{{Zbg}}", desc="size factor")
+            "phi": Param(r"\phi", unit="dimensionless", desc="resistance factor"),
+            "F_b": Param("F_b", unit="MPa", desc="modified bending strength"),
+            "S": Param("S", unit="mm**3", desc="section modulus"),
+            "K_x": Param("K_x", unit="dimensionless", desc="curvature factor"),
+            "K_Zbg": Param("K_{{Zbg}}", unit="dimensionless", desc="size factor")
         },
         logic=lambda phi, F_b, S, K_x, K_Zbg: phi * F_b * S * K_x * K_Zbg,
         latex_template=lambda phi, F_b, S, K_x, K_Zbg: f"{phi} \\cdot {F_b} \\cdot {S} \\cdot {K_x} \\cdot {K_Zbg}",
         source="CSA O86:24 7.5.6.6.1 a)",
+        result_unit="kN*m",
         desc="Moment Resistance a)"
     )
 
@@ -445,15 +447,16 @@ def moment_resistance_b1(phi: float, F_b: float, S: float, K_x: float, K_Zbg: fl
     return create_formula(
         name="M_{r1}",
         params={
-            "phi": Param("\\phi", desc="resistance factor"),
-            "F_b": Param("F_b", desc="modified bending strength"),
-            "S": Param("S", desc="section modulus"),
-            "K_x": Param("K_x", desc="curvature factor"),
-            "K_Zbg": Param("K_{{Zbg}}", desc="size factor")
+            "phi": Param(r"\phi", unit="dimensionless", desc="resistance factor"),
+            "F_b": Param("F_b", unit="MPa", desc="modified bending strength"),
+            "S": Param("S", unit="mm**3", desc="section modulus"),
+            "K_x": Param("K_x", unit="dimensionless", desc="curvature factor"),
+            "K_Zbg": Param("K_{{Zbg}}", unit="dimensionless", desc="size factor")
         },
         logic=lambda phi, F_b, S, K_x, K_Zbg: phi * F_b * S * K_x * K_Zbg,
         latex_template=lambda phi, F_b, S, K_x, K_Zbg: f"{phi} \\cdot {F_b} \\cdot {S} \\cdot {K_x} \\cdot {K_Zbg}",
         source="CSA O86:24 7.5.6.6.1 b)",
+        result_unit="kN*m",
         desc="Moment Resistance b) i)"
     )
 
@@ -491,15 +494,16 @@ def moment_resistance_b2(phi: float, F_b: float, S: float, K_x: float, K_L: floa
     return create_formula(
         name="M_{r2}",
         params={
-            "phi": Param("\\phi", desc="resistance factor"),
-            "F_b": Param("F_b", desc="modified bending strength"),
-            "S": Param("S", desc="section modulus"),
-            "K_x": Param("K_x", desc="curvature factor"),
-            "K_L": Param("K_L", desc="lateral stability factor")
+            "phi": Param(r"\phi", unit="dimensionless", desc="resistance factor"),
+            "F_b": Param("F_b", unit="MPa", desc="modified bending strength"),
+            "S": Param("S", unit="mm**3", desc="section modulus"),
+            "K_x": Param("K_x", unit="dimensionless", desc="curvature factor"),
+            "K_L": Param("K_L", unit="dimensionless", desc="lateral stability factor")
         },
         logic=lambda phi, F_b, S, K_x, K_L: phi * F_b * S * K_x * K_L,
         latex_template=lambda phi, F_b, S, K_x, K_L: f"{phi} \\cdot {F_b} \\cdot {S} \\cdot {K_x} \\cdot {K_L}",
         source="CSA O86:24 7.5.6.6.1 b)",
+        result_unit="kN*m",
         desc="Moment Resistance b) ii)"
     )
 

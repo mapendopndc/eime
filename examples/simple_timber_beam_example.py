@@ -2,8 +2,10 @@
 Simple Timber Beam Example
 
 This example demonstrates the design of a simply supported glulam beam
-under gravity loading using CSA O86:24, with full LaTeX output.
+under gravity loading using CSA O86:24, with full LaTeX output and Pint units.
 """
+
+from pint import UnitRegistry
 
 from design.csa_o86_2025.formulas import (
     long_duration_factor,
@@ -14,6 +16,9 @@ from design.csa_o86_2025.formulas import (
     modified_shear_strength,
     shear_resistance
 )
+
+# Create unit registry
+ureg = UnitRegistry()
 
 
 def main():
@@ -45,52 +50,44 @@ def main():
     M_f = (w_factored * span_m**2) / 8  # kNm
     V_f = (w_factored * span_m) / 2  # kN
     
-    # Section properties: 130 x 456 mm glulam
-    section_properties = {
-        'b': 130,  # mm
-        'd': 456,  # mm
-        'A': 130 * 456  # mm²
-    }
+    # Section properties: 130 x 456 mm glulam (with units)
+    b = 130 * ureg.mm
+    d = 456 * ureg.mm
+    A = (130 * 456) * ureg.mm**2
     
-    # Material properties: 20f-E D.Fir-L (from CSA O86:24 Table 7.3)
-    material_properties = {
-        'f_b': 30.8,  # MPa (bending strength)
-        'f_v': 2.1,   # MPa (shear strength)
-        'f_c': 27.5,  # MPa (compression strength)
-        'E': 11700    # MPa (modulus of elasticity)
-    }
+    # Material properties: 20f-E D.Fir-L (from CSA O86:24 Table 7.3) with units
+    f_b = 30.8 * ureg.MPa  # bending strength
+    f_v = 2.1 * ureg.MPa   # shear strength
+    f_c = 27.5 * ureg.MPa  # compression strength  
+    E = 11700 * ureg.MPa   # modulus of elasticity
     
-    # Design parameters
-    design_parameters = {
-        # Resistance factors
-        'phi_b': 0.9,  # Bending
-        'phi_v': 0.9,  # Shear
-        'phi_c': 0.8,  # Compression
-        
-        # System factor
-        'K_H': 1.0,  # No load sharing
-        
-        # Service condition factors (dry service)
-        'K_Sb': 1.0,
-        'K_Sv': 1.0,
-        'K_Sc': 1.0,
-        'K_SE': 1.0,
-        
-        # Treatment factor (untreated)
-        'K_T': 1.0,
-        
-        # Curvature factor (straight beam)
-        'K_x': 1.0,
-        
-        # Span for size factor calculation
-        'L': span_m * 1000  # mm
-    }
+    # Design parameters (dimensionless factors)
+    phi_b = 0.9 * ureg.dimensionless  # Bending resistance factor
+    phi_v = 0.9 * ureg.dimensionless  # Shear resistance factor
+    phi_c = 0.8 * ureg.dimensionless  # Compression resistance factor
+    
+    K_H = 1.0 * ureg.dimensionless   # System factor
+    
+    # Service condition factors (dry service)
+    K_Sb = 1.0 * ureg.dimensionless
+    K_Sv = 1.0 * ureg.dimensionless
+    K_Sc = 1.0 * ureg.dimensionless
+    K_SE = 1.0 * ureg.dimensionless
+    
+    # Treatment factor (untreated)
+    K_T = 1.0 * ureg.dimensionless
+    
+    # Curvature factor (straight beam)
+    K_x = 1.0 * ureg.dimensionless
+    
+    # Span for size factor calculation
+    L = (span_m * 1000) * ureg.mm  # Convert to mm
     
     # Loading for duration factor calculation
     # Assume 50% dead load, 50% live load for K_D
     total_load = w_dead + w_live
-    P_L = w_dead / total_load * 100  # Percentage long-term (dead)
-    P_S = w_live / total_load * 100  # Percentage standard-term (live)
+    P_L_percent = (w_dead / total_load * 100) * ureg.dimensionless  # Percentage long-term (dead)
+    P_S_percent = (w_live / total_load * 100) * ureg.dimensionless  # Percentage standard-term (live)
     
     # Storage for formulas and LaTeX output
     formulas = []
@@ -99,7 +96,7 @@ def main():
     # ==========================================
     # STEP 1: Load Duration Factor
     # ==========================================
-    KD = long_duration_factor(P_L, P_S)
+    KD = long_duration_factor(P_L_percent, P_S_percent)
     K_D_value = KD.solve().result
     formulas.append(KD)
     latex_output.append("### Load Duration Factor\n")
@@ -109,11 +106,11 @@ def main():
     # STEP 2: Modified Bending Strength
     # ==========================================
     Fb = modified_bending_strength(
-        material_properties['f_b'],
+        f_b,
         K_D_value,
-        design_parameters['K_H'],
-        design_parameters['K_Sb'],
-        design_parameters['K_T']
+        K_H,
+        K_Sb,
+        K_T
     )
     F_b_value = Fb.solve().result
     formulas.append(Fb)
@@ -123,7 +120,7 @@ def main():
     # ==========================================
     # STEP 3: Section Modulus
     # ==========================================
-    S = section_modulus(section_properties['b'], section_properties['d'])
+    S = section_modulus(b, d)
     S_value = S.solve().result
     formulas.append(S)
     latex_output.append("### Section Modulus\n")
@@ -132,11 +129,7 @@ def main():
     # ==========================================
     # STEP 4: Bending Size Factor
     # ==========================================
-    KZbg = bending_size_factor(
-        section_properties['b'],
-        section_properties['d'],
-        design_parameters['L']
-    )
+    KZbg = bending_size_factor(b, d, L)
     K_Zbg_value = KZbg.solve().result
     formulas.append(KZbg)
     latex_output.append("### Bending Size Factor\n")
@@ -146,13 +139,14 @@ def main():
     # STEP 5: Moment Resistance
     # ==========================================
     Mr_a = moment_resistance_a(
-        design_parameters['phi_b'],
+        phi_b,
         F_b_value,
         S_value,
-        design_parameters['K_x'],
+        K_x,
         K_Zbg_value
     )
-    M_r = Mr_a.solve().result / 1e6  # Convert to kNm
+    M_r_result = Mr_a.solve().result
+    M_r = M_r_result.to('kN*m').magnitude  # Convert to kNm for display
     formulas.append(Mr_a)
     latex_output.append("### Moment Resistance (Method A)\n")
     latex_output.append(f"$$\n{Mr_a.generate_latex()}\n$$\n")
@@ -161,11 +155,11 @@ def main():
     # STEP 6: Modified Shear Strength
     # ==========================================
     Fv = modified_shear_strength(
-        material_properties['f_v'],
+        f_v,
         K_D_value,
-        design_parameters['K_H'],
-        design_parameters['K_Sv'],
-        design_parameters['K_T']
+        K_H,
+        K_Sv,
+        K_T
     )
     F_v_value = Fv.solve().result
     formulas.append(Fv)
@@ -176,11 +170,12 @@ def main():
     # STEP 7: Shear Resistance
     # ==========================================
     Vr = shear_resistance(
-        design_parameters['phi_v'],
+        phi_v,
         F_v_value,
-        section_properties['A']
+        A
     )
-    V_r = Vr.solve().result / 1000  # Convert to kN
+    V_r_result = Vr.solve().result
+    V_r = V_r_result.to('kN').magnitude  # Convert to kN for display
     formulas.append(Vr)
     latex_output.append("### Shear Resistance\n")
     latex_output.append(f"$$\n{Vr.generate_latex()}\n$$\n")
@@ -213,7 +208,7 @@ def main():
     print(f"  Beam spacing:        {spacing_m * 1000} mm")
     print(f"  Dead load:           {dead_load_kPa} kPa")
     print(f"  Live load:           {live_load_kPa} kPa")
-    print(f"  Section:             {section_properties['b']} x {section_properties['d']} mm")
+    print(f"  Section:             {b.magnitude:.0f} x {d.magnitude:.0f} mm")
     print(f"  Material:            20f-E D.Fir-L")
     print()
     print("LOADING:")
@@ -236,7 +231,7 @@ def main():
     # ==========================================
     markdown_content = generate_calculation_document(
         span_m, spacing_m, dead_load_kPa, live_load_kPa,
-        section_properties, material_properties,
+        b, d, f_b, f_v, E,
         w_factored, M_f, V_f,
         latex_output, results
     )
@@ -254,7 +249,7 @@ def main():
 
 def generate_calculation_document(
     span_m, spacing_m, dead_load_kPa, live_load_kPa,
-    section_properties, material_properties,
+    b, d, f_b, f_v, E,
     w_factored, M_f, V_f,
     latex_output, results
 ):
@@ -273,13 +268,13 @@ def generate_calculation_document(
     doc.append("### Geometry\n")
     doc.append(f"- Span: $L = {span_m}$ m\n")
     doc.append(f"- Beam spacing: $s = {spacing_m * 1000}$ mm\n")
-    doc.append(f"- Section: ${section_properties['b']} \\times {section_properties['d']}$ mm\n")
+    doc.append(f"- Section: ${b.magnitude:.0f} \\times {d.magnitude:.0f}$ mm\n")
     doc.append("\n")
     
     doc.append("### Material Properties (20f-E D.Fir-L)\n")
-    doc.append(f"- Specified bending strength: $f_b = {material_properties['f_b']}$ MPa\n")
-    doc.append(f"- Specified shear strength: $f_v = {material_properties['f_v']}$ MPa\n")
-    doc.append(f"- Modulus of elasticity: $E = {material_properties['E']}$ MPa\n")
+    doc.append(f"- Specified bending strength: $f_b = {f_b.magnitude}$ MPa\n")
+    doc.append(f"- Specified shear strength: $f_v = {f_v.magnitude}$ MPa\n")
+    doc.append(f"- Modulus of elasticity: $E = {E.magnitude}$ MPa\n")
     doc.append("\n")
     
     doc.append("### Loading\n")
@@ -337,9 +332,9 @@ def generate_calculation_document(
     doc.append("\n")
     
     if results['status'] == 'PASS':
-        doc.append(f"The ${section_properties['b']} \\times {section_properties['d']}$ mm 20f-E D.Fir-L glulam beam is adequate for the applied loading.\n")
+        doc.append(f"The ${b.magnitude:.0f} \\times {d.magnitude:.0f}$ mm 20f-E D.Fir-L glulam beam is adequate for the applied loading.\n")
     else:
-        doc.append(f"The ${section_properties['b']} \\times {section_properties['d']}$ mm 20f-E D.Fir-L glulam beam is **NOT** adequate for the applied loading. Consider increasing section size.\n")
+        doc.append(f"The ${b.magnitude:.0f} \\times {d.magnitude:.0f}$ mm 20f-E D.Fir-L glulam beam is **NOT** adequate for the applied loading. Consider increasing section size.\n")
     
     doc.append("\n---\n")
     doc.append("*Calculation performed using EIME Engineering Framework*\n")
