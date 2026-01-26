@@ -1,0 +1,6 @@
+plotly
+IPython
+openpyxl
+numpy
+pandas
+pint>=0.23

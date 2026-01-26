@@ -1,0 +1,22 @@
+{
+    "Dry-service conditions": {
+        "K_Sb": 1.00,
+        "K_Sf": 1.00,
+        "K_Sv": 1.00,
+        "K_Sc": 1.00,
+        "K_Scp": 1.00,
+        "K_St": 1.00,
+        "K_Stp": 1.00,
+        "K_SE": 1.00
+    },
+    "Wet-service conditions": {
+        "K_Sb": 0.80,
+        "K_Sf": 0.85,
+        "K_Sv": 0.87,
+        "K_Sc": 0.75,
+        "K_Scp": 0.67,
+        "K_St": 0.75,
+        "K_Stp": 0.85,
+        "K_SE": 0.9
+    }
+}
