@@ -1,0 +1,241 @@
+<html><head>
+    <meta charset="utf-8">
+    <title>markdown.css Example</title>
+    <meta name="viewport" content="width=device-width,minimum-scale=1,initial-scale=1">
+    <meta name="theme-color" content="#f5f5f5">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/recipage@0.1.1/dist/recipage.min.css">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/highlight.js@9.13.1/styles/github.min.css">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@sukka/markdown.css">
+</head>
+
+<body>
+    <div id="app"><article id="recipage-content" class="recipage-content markdown-body"><h1 id="headers">Headers</h1>
+<h1 id="h1">H1</h1>
+<h2 id="h2">H2</h2>
+<h3 id="h3">H3</h3>
+<h4 id="h4">H4</h4>
+<h5 id="h5">H5</h5>
+<h6 id="h6">H6</h6>
+<script src="https://polyfill.io/v3/polyfill.min.js?features=es6"></script>
+<script type="text/javascript" id="MathJax-script"
+  src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-chtml.js">
+</script>
+<p>Alternatively, for H1 and H2, an underline-ish style:</p>
+\begin{align*}
+x&=y           &  w &=z              &  a&=b+c\\
+2x&=-y         &  3w&=\frac{1}{2}z   &  a&=b\\
+-4 + 5x&=2+y   &  w+2&=-1+w          &  ab&=cb
+\end{align*}
+<h1 id="alt-h1">Alt-H1</h1>
+<h2 id="alt-h2">Alt-H2</h2>
+<h1 id="emphasis">Emphasis</h1>
+<p>Emphasis, aka italics, with <em>asterisks</em> or <em>underscores</em>.</p>
+<p>Strong emphasis, aka bold, with <strong>asterisks</strong> or <strong>underscores</strong>.</p>
+<p>Combined emphasis with <strong>asterisks and <em>underscores</em></strong>.</p>
+<p>Strikethrough uses two tildes. <del>Scratch this.</del></p>
+<h1 id="lists">Lists</h1>
+<pre><code class="language-markdown hljs"><span class="hljs-bullet">1. </span>First ordered list item
+<span class="hljs-bullet">2. </span>Another item
+  * Unordered sub-list.
+<span class="hljs-bullet">1. </span>Actual numbers don't matter, just that it's a number
+  1. Ordered sub-list
+<span class="hljs-bullet">4. </span>And another item.
+
+   You can have properly indented paragraphs within list items. Notice the blank line above, and the leading spaces (at least one, but we'll use three here to also align the raw Markdown).
+
+   To have a line break without a paragraph, you will need to use two trailing spaces.  
+   Note that this line is separate, but within the same paragraph.  
+   (This is contrary to the typical GFM line break behaviour, where trailing spaces are not required.)
+
+<span class="hljs-bullet">* </span>Unordered list can use asterisks
+<span class="hljs-bullet">- </span>Or minuses
+<span class="hljs-bullet">+ </span>Or pluses</code></pre>
+<ol>
+<li><p>First ordered list item</p>
+</li>
+<li><p>Another item</p>
+<ul>
+<li>Unordered sub-list.</li>
+</ul>
+</li>
+<li><p>Actual numbers don’t matter, just that it’s a number</p>
+<ol>
+<li>Ordered sub-list</li>
+</ol>
+</li>
+<li><p>And another item.</p>
+<p>You can have properly indented paragraphs within list items. Notice the blank line above, and the leading spaces (at least one, but we’ll use three here to also align the raw Markdown).</p>
+<p>To have a line break without a paragraph, you will need to use two trailing spaces.<br>Note that this line is separate, but within the same paragraph.<br>(This is contrary to the typical GFM line break behaviour, where trailing spaces are not required.)</p>
+</li>
+</ol>
+<ul>
+<li>Unordered list can use asterisks</li>
+</ul>
+<ul>
+<li>Or minuses</li>
+</ul>
+<ul>
+<li>Or pluses</li>
+</ul>
+<h1 id="inline-html">Inline HTML</h1>
+<pre><code class="language-markdown hljs"><span class="xml"><span class="hljs-tag">&lt;<span class="hljs-name">p</span>&gt;</span></span>To reboot your computer, press <span class="xml"><span class="hljs-tag">&lt;<span class="hljs-name">kbd</span>&gt;</span></span>ctrl<span class="xml"><span class="hljs-tag">&lt;/<span class="hljs-name">kbd</span>&gt;</span></span>+<span class="xml"><span class="hljs-tag">&lt;<span class="hljs-name">kbd</span>&gt;</span></span>alt<span class="xml"><span class="hljs-tag">&lt;/<span class="hljs-name">kbd</span>&gt;</span></span>+<span class="xml"><span class="hljs-tag">&lt;<span class="hljs-name">kbd</span>&gt;</span></span>del<span class="xml"><span class="hljs-tag">&lt;/<span class="hljs-name">kbd</span>&gt;</span></span>.<span class="xml"><span class="hljs-tag">&lt;/<span class="hljs-name">p</span>&gt;</span></span></code></pre>
+<p>To reboot your computer, press <kbd>ctrl</kbd>+<kbd>alt</kbd>+<kbd>del</kbd>.</p>
+
+<pre><code class="language-markdown hljs"><span class="xml"><span class="hljs-tag">&lt;<span class="hljs-name">dl</span>&gt;</span></span>
+<span class="hljs-code">    &lt;dt&gt;Definition list&lt;/dt&gt;</span>
+<span class="hljs-code">    &lt;dd&gt;Is something people use sometimes.&lt;/dd&gt;</span>
+
+<span class="hljs-code">    &lt;dt&gt;Markdown in HTML&lt;/dt&gt;</span>
+<span class="hljs-code">    &lt;dd&gt;Does *not* work **very** well. Use HTML &lt;em&gt;tags&lt;/em&gt;.&lt;/dd&gt;</span>
+<span class="xml"><span class="hljs-tag">&lt;/<span class="hljs-name">dl</span>&gt;</span></span></code></pre>
+<dl>
+    <dt>Definition list</dt>
+    <dd>Is something people use sometimes.</dd>
+
+<pre><code class="hljs xml"><span class="hljs-tag">&lt;<span class="hljs-name">dt</span>&gt;</span>Markdown in HTML<span class="hljs-tag">&lt;/<span class="hljs-name">dt</span>&gt;</span>
+<span class="hljs-tag">&lt;<span class="hljs-name">dd</span>&gt;</span>Does *not* work **very** well. Use HTML <span class="hljs-tag">&lt;<span class="hljs-name">em</span>&gt;</span>tags<span class="hljs-tag">&lt;/<span class="hljs-name">em</span>&gt;</span>.<span class="hljs-tag">&lt;/<span class="hljs-name">dd</span>&gt;</span></code></pre></dl>
+
+
+<h1 id="links">Links</h1>
+<p><a href="https://www.google.com">I’m an inline-style link</a></p>
+<p><a href="https://www.google.com" title="Google's Homepage">I’m an inline-style link with title</a></p>
+<p>[I’m a reference-style link][Arbitrary case-insensitive reference text]</p>
+<p><a href="../blob/master/LICENSE">I’m a relative reference to a repository file</a></p>
+<p>[You can use numbers for reference-style link definitions][1]</p>
+<p>Or leave it empty and use the [link text itself]</p>
+<p>Some text to show that the reference links can follow later.</p>
+<h1 id="images">Images</h1>
+<pre><code class="language-markdown hljs">hover to see the title text:
+
+Inline-style:
+![<span class="hljs-string">alt text</span>](<span class="hljs-link">https://i1.wp.com/theme-suka.github.io/demo/img/suka-favicon.png "Logo Title Text 1"</span>)
+
+Reference-style:
+![<span class="hljs-string">alt text</span>][<span class="hljs-symbol">logo</span>]
+
+[<span class="hljs-symbol">logo</span>]: <span class="hljs-link">https://i1.wp.com/theme-suka.github.io/demo/img/suka-favicon.png "Logo Title Text 2"</span></code></pre>
+<p>hover to see the title text:</p>
+<p>Inline-style:<br><img src="https://i1.wp.com/theme-suka.github.io/demo/img/suka-favicon.png" alt="alt text" title="Logo Title Text 1"></p>
+<p>Reference-style:<br><img src="https://i1.wp.com/theme-suka.github.io/demo/img/suka-favicon.png" alt="alt text" title="Logo Title Text 2"></p>
+<h1 id="code-and-syntax-highlighting">Code and Syntax Highlighting</h1>
+<p>Inline <code>code</code> has <code>back-ticks around</code> it.</p>
+<pre><code class="language-javascript hljs"><span class="hljs-keyword">var</span> s = <span class="hljs-string">"JavaScript syntax highlighting"</span>;
+alert(s);</code></pre>
+<pre><code class="language-python hljs">s = <span class="hljs-string">"Python syntax highlighting"</span>
+<span class="hljs-keyword">print</span> s</code></pre>
+<pre><code class="hljs xml">No language indicated, so no syntax highlighting.
+But let's throw in a <span class="hljs-tag">&lt;<span class="hljs-name">b</span>&gt;</span>tag<span class="hljs-tag">&lt;/<span class="hljs-name">b</span>&gt;</span>.</code></pre><h1 id="tables">Tables</h1>
+<table>
+<thead>
+<tr>
+<th></th>
+<th>ASCII</th>
+<th>HTML</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>Single backticks</td>
+<td><code>'Isn't this fun?'</code></td>
+<td>‘Isn’t this fun?’</td>
+</tr>
+<tr>
+<td>Quotes</td>
+<td><code>"Isn't this fun?"</code></td>
+<td>“Isn’t this fun?”</td>
+</tr>
+<tr>
+<td>Dashes</td>
+<td><code>-- is en-dash, --- is em-dash</code></td>
+<td>– is en-dash, — is em-dash</td>
+</tr>
+</tbody></table>
+<p>Colons can be used to align columns.</p>
+<table>
+<thead>
+<tr>
+<th>Tables</th>
+<th align="center">Are</th>
+<th align="right">Cool</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>col 3 is</td>
+<td align="center">right-aligned</td>
+<td align="right"></td>
+</tr>
+<tr>
+<td>col 2 is</td>
+<td align="center">centered</td>
+<td align="right"></td>
+</tr>
+<tr>
+<td>zebra stripes</td>
+<td align="center">are neat</td>
+<td align="right"></td>
+</tr>
+</tbody></table>
+<p>The outer pipes (|) are optional, and you don’t need to make the raw Markdown line up prettily. You can also use inline Markdown.</p>
+<table>
+<thead>
+<tr>
+<th>Markdown</th>
+<th>Less</th>
+<th>Pretty</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><em>Still</em></td>
+<td><code>renders</code></td>
+<td><strong>nicely</strong></td>
+</tr>
+<tr>
+<td>1</td>
+<td>2</td>
+<td>3</td>
+</tr>
+</tbody></table>
+<blockquote>
+<p>You can find more information about <strong>LaTeX</strong> mathematical expressions <a href="http://meta.math.stackexchange.com/questions/5020/mathjax-basic-tutorial-and-quick-reference">here</a>.</p>
+</blockquote>
+<h1 id="blockquotes">Blockquotes</h1>
+<blockquote>
+<p>Blockquotes are very handy in email to emulate reply text.<br>This line is part of the same quote.</p>
+</blockquote>
+<p>Quote break.</p>
+<blockquote>
+<p>This is a very long line that will still be quoted properly when it wraps. Oh boy let’s keep writing to make sure this is long enough to actually wrap for everyone. Oh, you can <em>put</em> <strong>Markdown</strong> into a blockquote.</p>
+</blockquote>
+<h1 id="horizontal-rule">Horizontal Rule</h1>
+<p>Three or more…</p>
+<hr>
+<p>Hyphens</p>
+<hr>
+<p>Asterisks</p>
+<hr>
+<p>Underscores</p>
+<h1 id="line-breaks">Line Breaks</h1>
+<pre><code class="language-markdown hljs">Here's a line for us to start with.
+
+This line is separated from the one above by two newlines, so it will be a <span class="hljs-emphasis">*separate paragraph*</span>.
+
+This line is also a separate paragraph, but...
+This line is only separated by a single newline, so it's a separate line in the <span class="hljs-emphasis">*same paragraph*</span>.</code></pre>
+<p>Here’s a line for us to start with.</p>
+<p>This line is separated from the one above by two newlines, so it will be a <em>separate paragraph</em>.</p>
+<p>This line is also a separate paragraph, but…<br>This line is only separated by a single newline, so it’s a separate line in the <em>same paragraph</em>.</p>
+<hr>
+<p>This is a regular paragraph.</p>
+<table>
+    <tbody><tr>
+        <td>Foo</td>
+    </tr>
+</tbody></table>
+
+<p>This is another regular paragraph.</p>
+</article><a href="https://github.com/SukkaW/markdown.css" class="github-corner" aria-label="View source on GitHub"><svg width="80" height="80" viewBox="0 0 250 250" style="fill:#151513; color:#fff; position: absolute; top: 0; border: 0; right: 0;" aria-hidden="true"><path d="M0,0 L115,115 L130,115 L142,142 L250,250 L250,0 Z"></path><path d="M128.3,109.0 C113.8,99.7 119.0,89.6 119.0,89.6 C122.0,82.7 120.5,78.6 120.5,78.6 C119.2,72.0 123.4,76.3 123.4,76.3 C127.3,80.9 125.5,87.3 125.5,87.3 C122.9,97.6 130.6,101.9 134.4,103.2" fill="currentColor" style="transform-origin: 130px 106px;" class="octo-arm"></path><path d="M115.0,115.0 C114.9,115.1 118.7,116.5 119.8,115.4 L133.7,101.6 C136.9,99.2 139.9,98.4 142.2,98.6 C133.8,88.0 127.5,74.4 143.8,58.0 C148.5,53.4 154.0,51.2 159.7,51.0 C160.3,49.4 163.2,43.6 171.4,40.1 C171.4,40.1 176.1,42.5 178.8,56.2 C183.1,58.6 187.2,61.8 190.9,65.4 C194.5,69.0 197.7,73.2 200.1,77.6 C213.8,80.2 216.3,84.9 216.3,84.9 C212.7,93.1 206.9,96.0 205.4,96.6 C205.1,102.4 203.0,107.8 198.3,112.5 C181.9,128.9 168.3,122.5 157.7,114.1 C157.9,116.9 156.7,120.9 152.7,124.9 L141.0,136.5 C139.8,137.7 141.6,141.9 141.8,141.8 Z" fill="currentColor" class="octo-body"></path></svg></a><footer class="recipage-footer"><div class="recipage-footer-box"><h1 class="recipage-footer-title">markdown.css (sukka ver.)</h1><img class="recipage-footer-logo" src="https://cdn.jsdelivr.net/npm/skx@0.0.1"></div></footer></div>
+
+
+<script src="https://cdn.jsdelivr.net/gh/highlightjs/cdn-release@9.13.1/build/highlight.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/emojify.js@1.1.0"></script>
+<script src="https://cdn.jsdelivr.net/npm/recipage@0.1.1"></script>
+</body></html>
