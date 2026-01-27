@@ -1,196 +1,201 @@
 # EIME - Engineering Intelligence Management Engine
 
-A Python framework for transparent, verifiable engineering calculations.
+Transparent, verifiable engineering calculations in Python — built for engineers who want results they can audit and trust.
 
-## Vision
+## Who this is for
 
-EIME enables engineers to write and review engineering formulas in simple, well-documented Python functions with transparency equivalent to hand calculations. It provides a scalable, production-ready framework for building libraries of atomic, human-verified formulas that can be used across multiple output formats (Streamlit apps, Jupyter notebooks, API endpoints, Python scripts).
+- Structural and civil engineers who want calculation workflows that read like hand calcs.
+- Teams that need traceable formulas, checks, and clear outputs.
+- Anyone building repeatable design calculations in Python.
 
-## Key Features
+## What you can do with EIME
 
-- **Transparent Formulas**: Write engineering calculations as simple, readable Python functions
-- **Documentation Generation**: Automatic documentation with LaTeX representation
-- **Check Flagging**: Built-in system for tracking design checks and warnings
-- **Batch Calculations**: Native support for numpy arrays for large-scale computations
-- **Modular Design**: Clear separation between core framework and design code implementations
-- **Testing Framework**: Unit testing utilities specifically for engineering formulas
+- **Run engineering calculations with transparency**: formulas are readable and documented.
+- **Generate clear outputs**: calculations are designed to be inspectable and review-ready.
+- **Flag checks and warnings**: built-in check tracking for design constraints.
+- **Scale up**: batch-ready calculations for multiple cases.
 
-## Installation
+## Why structural engineers move from Excel to EIME
 
-### Using UV (Recommended)
+- **Less hidden logic**: no cell references buried across tabs.
+- **Units are enforced**: missing/incorrect units fail fast.
+- **Checks live beside the math**: utilization limits, bounds, warnings.
+- **Reviewable + versionable**: formulas are plain Python, ideal for peer review and git.
+- **Easy param studies**: run dozens of cases without copy/paste.
+
+## Feature highlights (with better examples)
+
+### 1) A full formula is compact — and still contains everything
+
+This is a complete, usable formula definition (no docstring) with:
+named parameters, unit validation, LaTeX, a design-code reference, and a pass/fail check.
+
+```python
+from pint import UnitRegistry
+from eime import Param, STATUS, Check, create_formula, formula
+
+ureg = UnitRegistry()
+
+
+@formula
+def bending_utilization(demand, capacity):
+
+    return create_formula(
+        name="U",
+        params={
+            "demand": Param("M_u", unit="kN*m", desc="factored moment demand"),
+            "capacity": Param("M_r", unit="kN*m", desc="factored moment resistance"),
+        },
+        logic=lambda demand, capacity: demand / capacity,
+        latex_template=lambda demand, capacity: f"\\frac{{{demand}}}{{{capacity}}}",
+        source="CSA O86 (example)",
+        checks=[
+            Check.upperbound(1.0, STATUS.FAIL, 101, "Demand exceeds capacity", inclusive=True)
+        ],
+        desc="Bending utilization",
+    )
+
+
+u = bending_utilization(
+
+    demand=45 * ureg("kN*m"),
+    capacity=52 * ureg("kN*m"),
+)
+
+print(u.result)           # 0.865... dimensionless
+print(u.generate_latex()) # equation + substitutions + check summary
+```
+
+### 2) Unit safety (fail fast instead of “looks right”)
+
+If you accidentally pass unitless inputs (Excel-style), EIME raises a clear error instead of silently proceeding.
+
+### 3) Param studies without copy/paste (batch support)
+
+```python
+from pint import UnitRegistry
+import numpy as np
+
+ureg = UnitRegistry()
+
+demands = np.array([30, 40, 55]) * ureg("kN*m")
+capacity = 52 * ureg("kN*m")
+
+u = bending_utilization(demand=demands, capacity=capacity)
+print(u.result)  # array of utilizations
+```
+
+### 4) Compose calculations (formula-to-formula substitution)
+
+Because formulas are objects, you can build calculations from smaller pieces.
+
+```python
+from pint import UnitRegistry
+from eime import Param, create_formula, formula
+
+ureg = UnitRegistry()
+
+
+@formula
+def rect_area(b, d):
+
+    return create_formula(
+        name="A",
+        params={
+            "b": Param("b", unit="mm", desc="width"),
+            "d": Param("d", unit="mm", desc="depth"),
+        },
+        logic=lambda b, d: b * d,
+        latex_template=lambda b, d: f"{b}\\cdot {d}",
+        desc="Rectangular area",
+    )
+
+
+@formula
+def axial_stress(P, A):
+
+    return create_formula(
+        name="\\sigma",
+        params={
+            "P": Param("P", unit="kN", desc="axial load"),
+            "A": Param("A", unit="mm^2", desc="area"),
+        },
+        logic=lambda P, A: P / A,
+        latex_template=lambda P, A: f"\\frac{{{P}}}{{{A}}}",
+        result_unit="MPa",
+        desc="Axial stress",
+    )
+
+
+A = rect_area(b=140 * ureg.mm, d=235 * ureg.mm)
+sigma = axial_stress(P=350 * ureg.kN, A=A)  # pass the formula, not just the number
+print(sigma.result)
+```
+
+## Design codes available
+
+- **CSA O86-2025**: Engineering Design in Wood (Canadian timber design standard)
+
+## Install
+
+> EIME is currently installed from source.
+
+### Using uv (recommended)
 
 ```bash
-# Install UV if not already installed
 pip install uv
-
-# Clone the repository
 git clone https://github.com/yourusername/eime.git
 cd eime
-
-# Create virtual environment and install
 uv venv
 uv pip install -e .
-
-# Install with optional dependencies
-uv pip install -e ".[dev]"           # Development tools
-uv pip install -e ".[visualization]" # Plotting tools
-uv pip install -e ".[all]"          # Everything
 ```
 
 ### Using pip
 
 ```bash
+git clone https://github.com/yourusername/eime.git
+cd eime
 pip install -e .
 ```
 
-## Quick Start
+## Quick start
 
-```python
-import eime
-from design.csa_o86_2025.calculators import TimberCalculator
-
-# Example usage (to be implemented in later phases)
-# calculator = TimberCalculator()
-# results = calculator.design_beam(...)
-```
-
-## Project Structure
-
-```
-eime/                          # Core library
-├── formula.py                 # Formula framework
-├── procedure.py               # Design procedure framework
-├── calculator.py              # Calculator framework
-├── tables.py                  # Table loading utilities
-├── checks.py                  # Check flagging system
-├── output.py                  # Output formatting
-└── testing.py                 # Testing framework
-
-design/                        # Design code implementations
-└── csa_o86_2025/             # CSA O86-2025 timber design
-    ├── formulas/             # Timber formulas
-    ├── procedures/           # Timber procedures
-    ├── calculators/          # Timber calculators
-    └── tables/               # JSON reference tables
-
-utils/                         # Utility tools
-├── fem/                      # 2D FEM solver
-└── visualization/            # Plotting utilities
-
-examples/                     # Usage examples
-tests/                        # Test suite
-experiments/                  # Personal experimentation
-```
-
-## Core Concepts
-
-### Formula
-The atomic building block - a single engineering calculation with:
-- Clear inputs and outputs
-- Comprehensive documentation
-- LaTeX representation
-- Design checks and warnings
-- Support for batch calculations
-
-### Design Procedure
-A collection of formulas commonly used together for specific engineering tasks.
-
-### Calculator
-Higher-level interface that orchestrates design procedures and manages workflow.
-
-### Tables
-Design-code-specific reference data stored as JSON for easy parsing and versioning.
-
-## Development Status
-
-🚧 **Currently in active development - Phase 1: Foundation** 🚧
-
-- [x] Directory structure created
-- [x] Package configuration (pyproject.toml)
-- [ ] Core framework implementation
-- [ ] Timber design migration
-- [ ] Testing framework
-- [ ] Documentation and examples
-
-## Contributing
-
-This is currently a personal project under active refactoring. Contribution guidelines will be added in future releases.
-
-## Design Codes Supported
-
-- **CSA O86-2025**: Engineering Design in Wood (Canadian timber design standard)
-
-Additional design codes can be added by following the pattern in `design/csa_o86_2025/`.
-
-## Testing
+Run a ready-to-use example:
 
 ```bash
-# Run all tests
-pytest
-
-# Run with coverage
-pytest --cov=eime --cov=design
-
-# Run specific test file
-pytest tests/test_formulas.py
+python examples/simple_timber_beam_calculator_example.py
 ```
 
-## Code Quality
+See example outputs:
 
-```bash
-# Format code
-ruff format .
+- [examples/timber_beam_calculator_output.md](examples/timber_beam_calculator_output.md)
+- [examples/timber_column_calculator_output.md](examples/timber_column_calculator_output.md)
 
-# Lint code
-ruff check .
+## How EIME is organized (high level)
 
-# Type checking
-mypy eime/ design/ utils/
-```
+- **Formulas**: the atomic calculations
+- **Procedures**: common sequences of formulas for a design task
+- **Calculators**: friendly interfaces that orchestrate procedures
+- **Tables**: code-specific reference data
+
+## Current status
+
+🚧 **Active development** 🚧
+
+EIME is in the foundation and migration phases. Some APIs are still evolving.
+
+## Documentation
+
+- [Product Requirements Document](artifacts/PRD%20-%20EIME%20Refactor.md)
+- [Project Requirements](artifacts/Project%20Requirements.md)
 
 ## License
 
 MIT License - See [LICENSE](LICENSE) for details.
 
-## Documentation
+## Contributing
 
-For detailed documentation, see:
-- [Product Requirements Document](artifacts/PRD%20-%20EIME%20Refactor.md)
-- [Project Requirements](artifacts/Project%20Requirements.md)
-
-## Roadmap
-
-### Phase 1: Foundation ✅
-- Directory structure
-- Package configuration
-- UV setup
-
-### Phase 2: Core Framework (In Progress)
-- Formula framework
-- Procedure framework
-- Calculator framework
-- Table management
-- Testing utilities
-
-### Phase 3: Timber Design Migration
-- Migrate formulas from legacy code
-- Implement procedures
-- Build calculators
-- Unit tests
-
-### Phase 4: Utilities & Examples
-- 2D FEM solver
-- Visualization tools
-- Working examples
-
-### Phase 5: Testing & Documentation
-- Comprehensive test suite
-- API documentation
-- Migration guide
-
-## Contact
-
-For questions or feedback, please open an issue on GitHub.
+This is currently a personal project under active refactoring. Contribution guidelines will be added in future releases.
 
 ---
 

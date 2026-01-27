@@ -15,31 +15,6 @@ class TimberBeamCalculator(EngineeringCalculator):
     
     This calculator orchestrates bending and shear resistance
     calculations for glulam timber beams.
-    
-    Examples
-    --------
-    >>> from pint import UnitRegistry
-    >>> ureg = UnitRegistry()
-    >>> 
-    >>> calc = TimberBeamCalculator()
-    >>> results = calc.design(
-    ...     b=130 * ureg.mm,
-    ...     d=456 * ureg.mm,
-    ...     L=6000 * ureg.mm,
-    ...     f_b=30.8 * ureg.MPa,
-    ...     f_v=2.1 * ureg.MPa,
-    ...     M_f=50.5 * ureg.kN * ureg.m,
-    ...     V_f=25.2 * ureg.kN,
-    ...     P_L_percent=44.1,
-    ...     P_S_percent=55.9,
-    ...     K_H=1.0,
-    ...     K_Sb=1.0,
-    ...     K_Sv=1.0,
-    ...     K_T=1.0,
-    ...     K_x=1.0,
-    ...     phi_b=0.9,
-    ...     phi_v=0.9
-    ... )
     """
     
     def __init__(self) -> None:

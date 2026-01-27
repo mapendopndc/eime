@@ -15,30 +15,6 @@ class TimberColumnCalculator(EngineeringCalculator):
     
     This calculator orchestrates axial compression resistance
     calculations for glulam timber columns.
-    
-    Examples
-    --------
-    >>> from pint import UnitRegistry
-    >>> ureg = UnitRegistry()
-    >>> 
-    >>> calc = TimberColumnCalculator()
-    >>> results = calc.design(
-    ...     b=130 * ureg.mm,
-    ...     d=456 * ureg.mm,
-    ...     L=4000 * ureg.mm,
-    ...     L_ex=4000 * ureg.mm,
-    ...     L_ey=4000 * ureg.mm,
-    ...     f_c=25.0 * ureg.MPa,
-    ...     E=9500 * ureg.MPa,
-    ...     P_f=150 * ureg.kN,
-    ...     P_L_percent=70.0,
-    ...     P_S_percent=30.0,
-    ...     K_H=1.0,
-    ...     K_Sc=1.0,
-    ...     K_SE=1.0,
-    ...     K_T=1.0,
-    ...     phi_c=0.8
-    ... )
     """
     
     def __init__(self) -> None:
