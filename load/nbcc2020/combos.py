@@ -244,16 +244,18 @@ def _duration_percentages(
         if load_type in short_term_keys:
             short_nominal += np.where(active, nominal_mag, 0.0)
 
-    long_percent = np.where(
-        total_nominal == 0.0,
-        0.0,
-        100.0 * long_nominal / total_nominal,
-    )
-    short_percent = np.where(
-        total_nominal == 0.0,
-        0.0,
-        100.0 * short_nominal / total_nominal,
-    )
+    # Safely calculate percentages, avoiding division by zero warnings
+    with np.errstate(divide='ignore', invalid='ignore'):
+        long_percent = np.where(
+            total_nominal == 0.0,
+            0.0,
+            100.0 * long_nominal / total_nominal,
+        )
+        short_percent = np.where(
+            total_nominal == 0.0,
+            0.0,
+            100.0 * short_nominal / total_nominal,
+        )
 
     return long_percent * nd, short_percent * nd
 

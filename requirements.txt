@@ -4,3 +4,4 @@ openpyxl
 numpy
 pandas
 pint>=0.23
+PyNiteFEA

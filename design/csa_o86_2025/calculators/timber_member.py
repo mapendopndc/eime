@@ -18,6 +18,10 @@ class RectangularProfile:
         """Calculate moment of inertia."""
         I_value = self.b * pow(self.d, 3) / 12
         return I_value
+    
+    def Area(self):
+        """Calculate cross-sectional area."""
+        return self.b * self.d
 
 
 class TimberMaterial:
