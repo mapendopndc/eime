@@ -507,11 +507,12 @@ class EngineeringSwitch(EngineeringFunction):
             else:
                 self.solved_bounds.append(bound)
         
-        # Get input value - extract magnitude if it's a Pint Quantity
+        # Get input value and convert to Quantity if needed
         input_val = self.solved_inputs[0]
+        param = list(self.params.values())[0]
+        
         if is_quantity(input_val):
-            # Get the parameter to know expected unit
-            param = list(self.params.values())[0]
+            # Let Pint handle unit conversion, then extract magnitude
             input_array = extract_magnitude(input_val, param.unit)
             if first_quantity is None:
                 first_quantity = input_val
@@ -519,19 +520,20 @@ class EngineeringSwitch(EngineeringFunction):
             # Legacy support for raw floats/arrays
             input_array = np.atleast_1d(input_val).astype(float)
         
-        # Extract magnitudes from bounds if they're Pint Quantities
+        # Convert bounds to same units as input, then extract magnitudes
         bounds_array = []
         for bound in self.solved_bounds:
             if is_quantity(bound):
-                param = list(self.params.values())[0]
+                # Convert to input's unit for comparison
                 bounds_array.append(extract_magnitude(bound, param.unit))
             else:
                 bounds_array.append(float(bound))
         
-        # Extract magnitudes from outputs if they're Pint Quantities
+        # Convert outputs to output_unit, then extract magnitudes
         outputs_array = []
         for output in self.solved_outputs:
             if is_quantity(output):
+                # Convert to output unit
                 outputs_array.append(extract_magnitude(output, output_unit))
             else:
                 outputs_array.append(output)

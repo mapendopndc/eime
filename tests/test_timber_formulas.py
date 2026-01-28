@@ -6,6 +6,7 @@ Tests verify that migrated formulas produce correct results.
 
 import pytest
 import numpy as np
+from pint import UnitRegistry
 from eime import FormulaTestSuite, FormulaTestCase, assert_formula_result
 from design.csa_o86_2025.formulas import (
     # Section Properties
@@ -30,6 +31,9 @@ from design.csa_o86_2025.formulas import (
     slenderness_factor,
     compression_resistance,
 )
+
+ureg = UnitRegistry()
+nd = ureg.dimensionless
 
 
 class TestSectionProperties:
@@ -58,13 +62,13 @@ class TestBendingFormulas:
     
     def test_long_duration_factor(self):
         """Test long duration factor calculation."""
-        K_D = long_duration_factor(P_L=10.0, P_S=20.0)
+        K_D = long_duration_factor(P_L=10.0*nd, P_S=20.0*nd)
         expected = max(1.0 - 0.50 * np.log10(10.0/20.0), 0.65)
         assert_formula_result(K_D, expected, tolerance=1e-6)
     
     def test_long_duration_factor_minimum(self):
         """Test that K_D doesn't go below 0.65."""
-        K_D = long_duration_factor(P_L=50.0, P_S=10.0)
+        K_D = long_duration_factor(P_L=50.0*nd, P_S=10.0*nd)
         assert K_D.result >= 0.65, "K_D should not be less than 0.65"
     
     def test_modified_bending_strength(self):

@@ -31,6 +31,7 @@ class LoadCombinationResult:
     total: "Quantity"
     duration_long_percent: "Quantity"
     duration_short_percent: "Quantity"
+    load_combo_types: Sequence[str]  # Type of each combo: 'dead_only', 'includes_live', 'includes_wind_or_seismic'
 
 
 def nbcc_uls_combinations(
@@ -68,6 +69,8 @@ def nbcc_uls_combinations(
         short_term_keys=("L", "S", "W", "E"),
     )
 
+    combo_types = _classify_combo_types(factors, load_types)
+
     return LoadCombinationResult(
         names=names,
         load_types=load_types,
@@ -76,6 +79,7 @@ def nbcc_uls_combinations(
         total=total,
         duration_long_percent=duration_long,
         duration_short_percent=duration_short,
+        load_combo_types=combo_types,
     )
 
 
@@ -174,6 +178,45 @@ def _sum_components(components: Iterable["Quantity"]):
     for component in components[1:]:
         total = total + component
     return total
+
+
+def _classify_combo_types(factors: np.ndarray, load_types: Sequence[str]) -> Sequence[str]:
+    """
+    Classify each load combination by its load types for kd factor determination.
+    
+    Per CSA O86:
+    - Dead only: kd = 0.65 (permanent load)
+    - Standard term (Live, Snow): kd = 1.0 
+    - Short term (Wind, Earthquake): kd = 1.15
+    
+    Returns 'dead_only', 'includes_live', or 'includes_wind_or_seismic' for each combo.
+    """
+    combo_types = []
+    
+    for combo_idx in range(factors.shape[0]):
+        has_short_term = False  # W, E
+        has_standard = False  # L, S
+        has_only_dead = True
+        
+        for load_idx, load_type in enumerate(load_types):
+            if factors[combo_idx, load_idx] != 0.0:
+                if load_type in ("W", "E"):  # Wind, Earthquake are SHORT-TERM
+                    has_short_term = True
+                    has_only_dead = False
+                elif load_type in ("L", "S"):  # Live and Snow are STANDARD-TERM
+                    has_standard = True
+                    has_only_dead = False
+                elif load_type != "D":
+                    has_only_dead = False
+        
+        if has_short_term:
+            combo_types.append("includes_wind_or_seismic")  # kd = 1.15
+        elif has_standard:
+            combo_types.append("includes_live")  # kd = 1.0
+        else:
+            combo_types.append("dead_only")  # kd = 0.65
+    
+    return combo_types
 
 
 def _duration_percentages(

@@ -12,6 +12,8 @@ def glulam_compression_procedure(
     KD=None,
     Fc=None,
     KZcg=None,
+    CC_strong=None,
+    CC_weak=None,
     CC=None,
     KC=None,
     Pr=None
@@ -30,8 +32,12 @@ def glulam_compression_procedure(
         Modified compression strength calculation
     KZcg : EngineeringFormula
         Compression size factor calculation
+    CC_strong : EngineeringFormula, optional
+        Compression slenderness ratio for strong axis
+    CC_weak : EngineeringFormula, optional
+        Compression slenderness ratio for weak axis
     CC : EngineeringFormula
-        Compression slenderness ratio calculation
+        Maximum compression slenderness ratio calculation
     KC : EngineeringFormula
         Slenderness factor calculation
     Pr : EngineeringFormula
@@ -54,6 +60,10 @@ def glulam_compression_procedure(
         procedure.add_computation(Fc)
     if KZcg is not None:
         procedure.add_computation(KZcg, show_util=False)
+    if CC_strong is not None:
+        procedure.add_computation(CC_strong)
+    if CC_weak is not None:
+        procedure.add_computation(CC_weak)
     if CC is not None:
         procedure.add_computation(CC)
     if KC is not None:

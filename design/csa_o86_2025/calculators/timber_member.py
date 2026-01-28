@@ -41,7 +41,7 @@ class TimberSection:
 
 class TimberDesignParameters:
     """Design parameters: beam_ids, beam_length, end_conditions, service_conditions, lu, Wf, SumG."""
-    def __init__(self, beam_ids, beam_length, end_conditions, service_conditions, lu, Wf, SumG, ureg):
+    def __init__(self, beam_ids, beam_length, end_conditions, service_conditions, lu=None, Wf=None, SumG=None, ureg=None, lu_strong=None, lu_weak=None):
         self.K_e = TimberTables.EffectiveLengthFactorTable[end_conditions] * ureg.dimensionless
         
         # Service Factors (dimensionless from tables)
@@ -52,9 +52,21 @@ class TimberDesignParameters:
 
         self.beam_ids = beam_ids
         self.L = beam_length
-        self.lu = lu
-        self.Wf = Wf
-        self.SumG = SumG
+        
+        # Support both old (lu) and new (lu_strong, lu_weak) interfaces
+        if lu_strong is not None and lu_weak is not None:
+            self.lu_strong = lu_strong  # Unbraced length about strong axis (d)
+            self.lu_weak = lu_weak      # Unbraced length about weak axis (b)
+            self.lu = lu_strong  # For backward compatibility with bending checks
+        elif lu is not None:
+            self.lu = lu
+            self.lu_strong = lu
+            self.lu_weak = lu
+        else:
+            raise ValueError("Must provide either 'lu' or both 'lu_strong' and 'lu_weak'")
+        
+        self.Wf = Wf if Wf is not None else 1.0 * ureg.dimensionless
+        self.SumG = SumG if SumG is not None else 0.0 * ureg.dimensionless
 
         # Design factors (dimensionless)
         self.phi_b = 0.9 * ureg.dimensionless
@@ -66,8 +78,8 @@ class TimberDesignParameters:
 
 
 class TimberLoads:
-    """Applied loads: M3, M2 (moments), V2, V3 (shear), P (axial). PL_*/PS_* for duration percentages."""
-    def __init__(self):
+    """Applied loads: M3, M2 (moments), V2, V3 (shear), P (axial) and load duration factor KD."""
+    def __init__(self, KD=None):
         # Load components
         self.M3 = None
         self.M2 = None
@@ -75,17 +87,8 @@ class TimberLoads:
         self.V3 = None
         self.P = None
         
-        # Duration percentages (defaults: 0% long, 100% short)
-        self.PL_M3 = 0
-        self.PS_M3 = 100
-        self.PL_M2 = 0
-        self.PS_M2 = 100
-        self.PL_V2 = 0
-        self.PS_V2 = 100
-        self.PL_V3 = 0
-        self.PS_V3 = 100
-        self.PL_P = 0
-        self.PS_P = 100
+        # Load duration factor (must be provided by user)
+        self.KD = KD
 
 
 class TimberBeamDesign:
@@ -108,8 +111,7 @@ class TimberBeamDesign:
         mat = self.section.material
 
         calcs = {}
-        calcs["KD"] = TimberDesign.long_duration_factor(loads.PL_M3, loads.PS_M3)
-        calcs["Fb"] = TimberDesign.modified_bending_strength(mat.f_b, calcs["KD"], params.K_H, params.K_Sb, params.K_T)
+        calcs["Fb"] = TimberDesign.modified_bending_strength(mat.f_b, loads.KD, params.K_H, params.K_Sb, params.K_T)
         calcs["KZbg"] = TimberDesign.bending_size_factor(dim.b, dim.d, params.L)
         calcs["S"] = TimberDesign.section_modulus(dim.b, dim.d)
         calcs["lambda1"] = TimberDesign.slenderness_ratio(params.lu, dim.d, dim.b)
@@ -134,34 +136,94 @@ class TimberBeamDesign:
         mat = self.section.material
 
         calcs = {}
-        calcs["KD"] = TimberDesign.long_duration_factor(loads.PL_V2, loads.PS_V2)
         calcs["CV"] = TimberDesign.shear_load_coefficient(params.Wf, params.L.to('mm'), params.SumG)
-        calcs["Fv"] = TimberDesign.modified_shear_strength(mat.f_v, calcs["KD"], params.K_H, params.K_Sv, params.K_T)
+        calcs["Fv"] = TimberDesign.modified_shear_strength(mat.f_v, loads.KD, params.K_H, params.K_Sv, params.K_T)
         calcs["Wr"] = TimberDesign.total_shear_resistance(params.phi_v, calcs["Fv"], dim.b*dim.d, calcs["CV"], (dim.b*dim.d*params.L).to('mm**3'))
         calcs["Vr"] = TimberDesign.shear_resistance(params.phi_v, calcs["Fv"], dim.b*dim.d, loads.V2)
 
         return TimberProcedures.glulam_shear_procedure(**calcs)
 
-    def CompressionResistance(self) -> EngineeringProcedure:
-        """Calculate compression resistance per CSA O86."""
+    def CompressionResistance(self, axis='both') -> EngineeringProcedure:
+        """Calculate compression resistance per CSA O86.
+        
+        Parameters
+        ----------
+        axis : str, optional
+            Which axis to check: 'strong', 'weak', or 'both' (default).
+            'both' returns the governing (worst) case.
+            
+        Returns
+        -------
+        EngineeringProcedure
+            Compression resistance procedure for the specified axis
+        """
+        
+        if axis == 'both':
+            # Check both axes and return the governing case
+            strong_proc = self._CompressionResistance_SingleAxis('strong')
+            weak_proc = self._CompressionResistance_SingleAxis('weak')
+            
+            # Compare utilizations - higher is governing
+            strong_util = strong_proc.get_worst_utilization().max()
+            weak_util = weak_proc.get_worst_utilization().max()
+            
+            if strong_util >= weak_util:
+                return strong_proc
+            else:
+                return weak_proc
+        else:
+            return self._CompressionResistance_SingleAxis(axis)
+    
+    def _CompressionResistance_SingleAxis(self, axis) -> EngineeringProcedure:
+        """Calculate compression resistance checking both axes for slenderness.
+        
+        Per CSA O86:24 7.5.8.2, the slenderness factor K_c shall be based on 
+        the maximum slenderness ratio considering both axes of buckling.
+        """
                 
         loads = self.loading
         params = self.parameters
         dim = self.section.profile
         mat = self.section.material
+        
+        # Determine which axis governs for naming
+        if axis == 'strong':
+            axis_name = "Strong Axis"
+        elif axis == 'weak':
+            axis_name = "Weak Axis"
+        else:
+            raise ValueError(f"Invalid axis '{axis}'. Must be 'strong' or 'weak'.")
 
         calcs = {}
-        calcs["KD"] = TimberDesign.long_duration_factor(loads.PL_P, loads.PS_P)
-        calcs["Fc"] = TimberDesign.modified_compression_strength(mat.f_c, calcs["KD"], params.K_H, params.K_Sc, params.K_T)
+        calcs["Fc"] = TimberDesign.modified_compression_strength(mat.f_c, loads.KD, params.K_H, params.K_Sc, params.K_T)
         calcs["KZcg"] = TimberDesign.compression_size_factor(dim.b*dim.d*params.L)
-        calcs["CC"] = TimberDesign.compression_slenderness_ratio(params.L * params.K_e, dim.b)
+        
+        # Calculate slenderness ratio in both directions
+        # Strong axis buckling: controlled by strong dimension (d)
+        # Weak axis buckling: controlled by weak dimension (b)
+        calcs["CC_strong"] = TimberDesign.compression_slenderness_ratio_strong_axis(
+            params.lu_strong * params.K_e, dim.d
+        )
+        calcs["CC_weak"] = TimberDesign.compression_slenderness_ratio_weak_axis(
+            params.lu_weak * params.K_e, dim.b
+        )
+        
+        # Take maximum slenderness ratio for K_c calculation
+        calcs["CC"] = TimberDesign.compression_slenderness_ratio_max(
+            calcs["CC_strong"], calcs["CC_weak"]
+        )
+        
+        # Slenderness factor uses the maximum Cc
         calcs["KC"] = TimberDesign.slenderness_factor(calcs["Fc"], calcs["KZcg"], calcs["CC"], mat.E*0.87, params.K_SE, params.K_T)
+        
         if loads.P is not None:
             calcs["Pr"] = TimberDesign.compression_resistance(params.phi_c, calcs["Fc"], dim.b*dim.d, calcs["KZcg"], calcs["KC"], loads.P)
         else:
             calcs["Pr"] = TimberDesign.compression_resistance(params.phi_c, calcs["Fc"], dim.b*dim.d, calcs["KZcg"], calcs["KC"])
 
-        return TimberProcedures.glulam_compression_procedure(**calcs)
+        procedure = TimberProcedures.glulam_compression_procedure(**calcs)
+        procedure.name = f"Glulam Compression ({axis_name})"
+        return procedure
 
     def _add_check_results(self, procedure: EngineeringProcedure, util_key: str, suffix: str):
         """Add check results to utilization, status log, and checklist."""
@@ -177,5 +239,6 @@ class TimberBeamDesign:
         self.strongAxisShearCheck = self.ShearResistance(0)
         self._add_check_results(self.strongAxisShearCheck, 'uV2', '_V2')
 
-        self.parallelCompressionCheck = self.CompressionResistance()
+        # Check both axes for compression and use governing case
+        self.parallelCompressionCheck = self.CompressionResistance(axis='both')
         self._add_check_results(self.parallelCompressionCheck, 'uP', '_P')

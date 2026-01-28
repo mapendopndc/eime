@@ -32,6 +32,9 @@ from .glulam_compression import (
     modified_compression_strength,
     compression_size_factor,
     compression_slenderness_ratio,
+    compression_slenderness_ratio_strong_axis,
+    compression_slenderness_ratio_weak_axis,
+    compression_slenderness_ratio_max,
     slenderness_factor,
     compression_resistance,
 )
@@ -73,6 +76,9 @@ __all__ = [
     "modified_compression_strength",
     "compression_size_factor",
     "compression_slenderness_ratio",
+    "compression_slenderness_ratio_strong_axis",
+    "compression_slenderness_ratio_weak_axis",
+    "compression_slenderness_ratio_max",
     "slenderness_factor",
     "compression_resistance",
     # Section Properties

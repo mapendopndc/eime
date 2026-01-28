@@ -192,6 +192,9 @@ def main():
     loading.PL_P = P_L_percent
     loading.PS_P = P_S_percent
     
+    # Set load combination types for kd factor calculation
+    loading.combo_type = combos.load_combo_types
+    
     # Create design instance and run all checks
     design = TimberBeamDesign(section=section, loading=loading, parameters=parameters)
     procedure = design.checkAll()

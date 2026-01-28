@@ -175,36 +175,40 @@ class Upperbound(EngineeringCheck):
         self.inclusive = inclusive
     
     def check(self) -> EngineeringCheck:
-        """Evaluate upper bound check."""
-        # Extract magnitude from result (handle Quantities)
-        if is_quantity(self.formula.result):
-            result = np.array(extract_magnitude(self.formula.result), dtype=float)
-        else:
-            result = np.array(self.formula.result, dtype=float)
+        """Evaluate upper bound check.
         
-        # Extract bound value (may be from another formula or a Quantity)
+        Philosophy: Work with Quantities directly and let Pint handle unit
+        conversions. Only extract magnitudes at the end for numpy operations.
+        """
+        # Get result (keep as Quantity if it has units)
+        result = self.formula.result
+        
+        # Get bound value (from formula or direct value)
         from .formula import EngineeringFunction
         if isinstance(self.upperbound, EngineeringFunction):
-            bound_result = self.upperbound.result
-            if is_quantity(bound_result):
-                bound_value = np.array(extract_magnitude(bound_result), dtype=float)
-            else:
-                bound_value = np.array(bound_result, dtype=float)
-        elif is_quantity(self.upperbound):
-            bound_value = np.array(extract_magnitude(self.upperbound), dtype=float)
+            bound = self.upperbound.result
         else:
-            bound_value = self.upperbound
+            bound = self.upperbound
+        
+        # If result has units, ensure bound is converted to same units
+        if is_quantity(result) and is_quantity(bound):
+            # Pint will automatically handle unit conversion in comparisons
+            bound = bound.to(result.units)
+        
+        # Extract magnitudes for numpy operations (after unit conversion)
+        result_mag = extract_magnitude(result) if is_quantity(result) else np.array(result, dtype=float)
+        bound_mag = extract_magnitude(bound) if is_quantity(bound) else np.array(bound, dtype=float)
         
         # Apply check
         if self.inclusive:
-            failed = result >= bound_value
+            failed = result_mag >= bound_mag
         else:
-            failed = result > bound_value
+            failed = result_mag > bound_mag
         
         self.applied_check_ids = np.where(failed, self.check_id, None)
         self.applied_status_codes = np.where(failed, self.status_code, STATUS.PASS)
         self.applied_messages = np.where(failed, self.message, None)
-        self.util = result / bound_value
+        self.util = result_mag / bound_mag
         
         return self
     
@@ -292,36 +296,40 @@ class Lowerbound(EngineeringCheck):
         self.inclusive = inclusive
     
     def check(self) -> EngineeringCheck:
-        """Evaluate lower bound check."""
-        # Extract magnitude from result (handle Quantities)
-        if is_quantity(self.formula.result):
-            result = np.array(extract_magnitude(self.formula.result), dtype=float)
-        else:
-            result = np.array(self.formula.result, dtype=float)
+        """Evaluate lower bound check.
         
-        # Extract bound value (may be from another formula or a Quantity)
+        Philosophy: Work with Quantities directly and let Pint handle unit
+        conversions. Only extract magnitudes at the end for numpy operations.
+        """
+        # Get result (keep as Quantity if it has units)
+        result = self.formula.result
+        
+        # Get bound value (from formula or direct value)
         from .formula import EngineeringFunction
         if isinstance(self.lowerbound, EngineeringFunction):
-            bound_result = self.lowerbound.result
-            if is_quantity(bound_result):
-                bound_value = np.array(extract_magnitude(bound_result), dtype=float)
-            else:
-                bound_value = np.array(bound_result, dtype=float)
-        elif is_quantity(self.lowerbound):
-            bound_value = np.array(extract_magnitude(self.lowerbound), dtype=float)
+            bound = self.lowerbound.result
         else:
-            bound_value = self.lowerbound
+            bound = self.lowerbound
+        
+        # If result has units, ensure bound is converted to same units
+        if is_quantity(result) and is_quantity(bound):
+            # Pint will automatically handle unit conversion in comparisons
+            bound = bound.to(result.units)
+        
+        # Extract magnitudes for numpy operations (after unit conversion)
+        result_mag = extract_magnitude(result) if is_quantity(result) else np.array(result, dtype=float)
+        bound_mag = extract_magnitude(bound) if is_quantity(bound) else np.array(bound, dtype=float)
         
         # Apply check
         if self.inclusive:
-            failed = result <= bound_value
+            failed = result_mag <= bound_mag
         else:
-            failed = result < bound_value
+            failed = result_mag < bound_mag
         
         self.applied_check_ids = np.where(failed, self.check_id, None)
         self.applied_status_codes = np.where(failed, self.status_code, STATUS.PASS)
         self.applied_messages = np.where(failed, self.message, None)
-        self.util = bound_value / result
+        self.util = bound_mag / result_mag
         
         return self
     
@@ -409,28 +417,31 @@ class Equality(EngineeringCheck):
         self.tolerance = tolerance
     
     def check(self) -> EngineeringCheck:
-        """Evaluate equality check."""
-        # Extract magnitude from result (handle Quantities)
-        if is_quantity(self.formula.result):
-            result = np.array(extract_magnitude(self.formula.result), dtype=float)
-        else:
-            result = np.array(self.formula.result, dtype=float)
+        """Evaluate equality check.
         
-        # Extract expected value
+        Philosophy: Work with Quantities directly and let Pint handle unit
+        conversions. Only extract magnitudes at the end for numpy operations.
+        """
+        # Get result (keep as Quantity if it has units)
+        result = self.formula.result
+        
+        # Get expected value (from formula or direct value)
         from .formula import EngineeringFunction
         if isinstance(self.expected_value, EngineeringFunction):
-            expected_result = self.expected_value.result
-            if is_quantity(expected_result):
-                expected = np.array(extract_magnitude(expected_result), dtype=float)
-            else:
-                expected = np.array(expected_result, dtype=float)
-        elif is_quantity(self.expected_value):
-            expected = np.array(extract_magnitude(self.expected_value), dtype=float)
+            expected = self.expected_value.result
         else:
             expected = self.expected_value
         
+        # If result has units, ensure expected is converted to same units
+        if is_quantity(result) and is_quantity(expected):
+            expected = expected.to(result.units)
+        
+        # Extract magnitudes for numpy operations (after unit conversion)
+        result_mag = extract_magnitude(result) if is_quantity(result) else np.array(result, dtype=float)
+        expected_mag = extract_magnitude(expected) if is_quantity(expected) else np.array(expected, dtype=float)
+        
         # Check if within tolerance
-        relative_diff = np.abs((result - expected) / expected)
+        relative_diff = np.abs((result_mag - expected_mag) / expected_mag)
         failed = relative_diff > self.tolerance
         
         self.applied_check_ids = np.where(failed, self.check_id, None)
@@ -512,13 +523,11 @@ class InvalidResult(EngineeringCheck):
     
     def check(self) -> EngineeringCheck:
         """Check for NaN or Inf values."""
-        # Extract magnitude from result (handle Quantities)
-        if is_quantity(self.formula.result):
-            result = np.array(extract_magnitude(self.formula.result), dtype=float)
-        else:
-            result = np.array(self.formula.result, dtype=float)
+        # Extract magnitude from result (Quantities are fine, just get the numbers)
+        result = self.formula.result
+        result_mag = extract_magnitude(result) if is_quantity(result) else np.array(result, dtype=float)
         
-        invalid = np.isnan(result) | np.isinf(result)
+        invalid = np.isnan(result_mag) | np.isinf(result_mag)
         
         self.applied_check_ids = np.where(invalid, self.check_id, None)
         self.applied_status_codes = np.where(invalid, self.status_code, STATUS.PASS)

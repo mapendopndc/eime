@@ -138,6 +138,130 @@ def compression_slenderness_ratio(L_e: float, w: float) -> EngineeringFormula:
 
 
 @formula
+def compression_slenderness_ratio_strong_axis(L_e_strong: float, d: float) -> EngineeringFormula:
+    """
+    Slenderness ratio for strong axis buckling, C_C_strong.
+    
+    For strong axis buckling, the strong dimension d controls (radius of gyration proportional to d).
+    
+    Parameters
+    ----------
+    L_e_strong : float
+        Effective length for strong axis buckling
+    d : float
+        Depth (strong dimension)
+        
+    Returns
+    -------
+    EngineeringFormula
+        Formula for compression slenderness ratio about strong axis
+        
+    Notes
+    -----
+    LaTeX: $C_{{C,strong}} = \\frac{{L_{{e,strong}}}}{{d}}$
+    
+    References
+    ----------
+    CSA O86:24 7.5.8.2
+    """
+    return create_formula(
+        name="C_{C,strong}",
+        params={
+            "L_e_strong": Param("L_{e,strong}", unit="mm", desc="effective length for strong axis buckling"),
+            "d": Param("d", unit="mm", desc="depth (strong dimension)")
+        },
+        logic=lambda L_e_strong, d: L_e_strong / d,
+        result_unit='dimensionless',
+        latex_template=lambda L_e_strong, d: f"\\frac{{{L_e_strong}}}{{{d}}}",
+        source="CSA O86:24 7.5.8.2",
+        desc="Compression Slenderness Ratio (Strong Axis)"
+    )
+
+
+@formula
+def compression_slenderness_ratio_weak_axis(L_e_weak: float, b: float) -> EngineeringFormula:
+    """
+    Slenderness ratio for weak axis buckling, C_C_weak.
+    
+    For weak axis buckling, the weak dimension b controls (radius of gyration proportional to b).
+    
+    Parameters
+    ----------
+    L_e_weak : float
+        Effective length for weak axis buckling
+    b : float
+        Width (weak dimension)
+        
+    Returns
+    -------
+    EngineeringFormula
+        Formula for compression slenderness ratio about weak axis
+        
+    Notes
+    -----
+    LaTeX: $C_{{C,weak}} = \\frac{{L_{{e,weak}}}}{{b}}$
+    
+    References
+    ----------
+    CSA O86:24 7.5.8.2
+    """
+    return create_formula(
+        name="C_{C,weak}",
+        params={
+            "L_e_weak": Param("L_{e,weak}", unit="mm", desc="effective length for weak axis buckling"),
+            "b": Param("b", unit="mm", desc="width (weak dimension)")
+        },
+        logic=lambda L_e_weak, b: L_e_weak / b,
+        result_unit='dimensionless',
+        latex_template=lambda L_e_weak, b: f"\\frac{{{L_e_weak}}}{{{b}}}",
+        source="CSA O86:24 7.5.8.2",
+        desc="Compression Slenderness Ratio (Weak Axis)"
+    )
+
+
+@formula
+def compression_slenderness_ratio_max(C_C_strong: float, C_C_weak: float) -> EngineeringFormula:
+    """
+    Maximum slenderness ratio from both directions, C_C.
+    
+    The slenderness factor K_c shall be based on the maximum slenderness ratio
+    considering both axes of buckling.
+    
+    Parameters
+    ----------
+    C_C_strong : float
+        Slenderness ratio for strong axis buckling
+    C_C_weak : float
+        Slenderness ratio for weak axis buckling
+        
+    Returns
+    -------
+    EngineeringFormula
+        Formula for maximum compression slenderness ratio
+        
+    Notes
+    -----
+    LaTeX: $C_C = \\max(C_{{C,strong}}, C_{{C,weak}})$
+    
+    References
+    ----------
+    CSA O86:24 7.5.8.2
+    """
+    return create_formula(
+        name="C_C",
+        params={
+            "C_C_strong": Param("C_{C,strong}", unit="dimensionless", desc="slenderness ratio for strong axis"),
+            "C_C_weak": Param("C_{C,weak}", unit="dimensionless", desc="slenderness ratio for weak axis")
+        },
+        logic=lambda C_C_strong, C_C_weak: np.maximum(C_C_strong, C_C_weak),
+        result_unit='dimensionless',
+        latex_template=lambda C_C_strong, C_C_weak: f"\\max({C_C_strong}, {C_C_weak})",
+        source="CSA O86:24 7.5.8.2",
+        desc="Maximum Compression Slenderness Ratio"
+    )
+
+
+@formula
 def slenderness_factor(F_c: float, K_Zcg: float, C_C: float, E_05: float, K_SE: float, K_T: float) -> EngineeringFormula:
     """
     Slenderness factor, K_c.
