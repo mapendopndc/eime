@@ -7,10 +7,47 @@ structured design procedures with automatic documentation and result tracking.
 
 from typing import Any, Dict, List, Optional, Union
 import pandas as pd
+import warnings
 
 from .formula import EngineeringFunction
 from .output import DisplayText
 from .checks import EngineeringCheck
+
+
+def _dict_to_dataframe(data_dict: Dict[str, Any]) -> pd.DataFrame:
+    """
+    Convert dict to DataFrame, handling Pint quantities by extracting magnitudes.
+    
+    Suppresses UnitStrippedWarning since we intentionally strip units for tabular output.
+    
+    Args:
+        data_dict: Dictionary of column name -> values
+        
+    Returns:
+        DataFrame with magnitude values (units stripped)
+    """
+    if not data_dict:
+        return pd.DataFrame()
+    
+    # Check if values are scalar or array-like
+    first_val = next(iter(data_dict.values()))
+    
+    # Extract magnitudes from Pint quantities
+    extracted_dict = {}
+    for key, val in data_dict.items():
+        if hasattr(val, 'magnitude'):
+            # Pint quantity - extract magnitude
+            extracted_dict[key] = val.magnitude
+        else:
+            extracted_dict[key] = val
+    
+    try:
+        # Try to get length - works for arrays
+        len(first_val)
+        return pd.DataFrame(extracted_dict)
+    except TypeError:
+        # Scalar values - need explicit index
+        return pd.DataFrame(extracted_dict, index=[0])
 
 
 class EngineeringProcedure:
@@ -39,11 +76,11 @@ class EngineeringProcedure:
         self.procedure: List[Union[EngineeringFunction, DisplayText]] = []
         self.checks: Dict[int, EngineeringCheck] = {}
         
-        # Result tracking
-        self.results: pd.DataFrame = pd.DataFrame()
-        self.status_log: pd.DataFrame = pd.DataFrame()
-        self.check_log: pd.DataFrame = pd.DataFrame()
-        self.utilizations: pd.DataFrame = pd.DataFrame()
+        # Result tracking - use dicts to preserve Pint quantities
+        self.results: Dict[str, Any] = {}
+        self.status_log: Dict[str, Any] = {}
+        self.check_log: Dict[str, Any] = {}
+        self.utilizations: Dict[str, Any] = {}
     
     def add_computation(
         self,
@@ -101,7 +138,10 @@ class EngineeringProcedure:
             self.add_title(title, level=level)
         
         self.procedure.extend(other.procedure)
-        self.results = pd.concat([self.results, other.results], axis=1)
+        self.results = {**self.results, **other.results}
+        self.status_log = {**self.status_log, **other.status_log}
+        self.check_log = {**self.check_log, **other.check_log}
+        self.utilizations = {**self.utilizations, **other.utilizations}
     
     def generate_latex(self, index: int = 0) -> str:
         """
@@ -187,10 +227,11 @@ class EngineeringProcedure:
         Returns:
             Series with worst status for each element
         """
-        if self.status_log.empty:
+        if not self.status_log:
             return pd.Series()
         
-        return self.status_log.max(axis=1)
+        status_df = _dict_to_dataframe(self.status_log)
+        return status_df.max(axis=1)
     
     def get_worst_utilization(self) -> pd.Series:
         """
@@ -199,10 +240,11 @@ class EngineeringProcedure:
         Returns:
             Series with worst utilization for each element
         """
-        if self.utilizations.empty:
+        if not self.utilizations:
             return pd.Series()
         
-        return self.utilizations.max(axis=1)
+        util_df = _dict_to_dataframe(self.utilizations)
+        return util_df.max(axis=1)
     
     def get_governing_check(self) -> pd.Series:
         """
@@ -211,10 +253,11 @@ class EngineeringProcedure:
         Returns:
             Series with check IDs of governing checks
         """
-        if self.utilizations.empty:
+        if not self.utilizations:
             return pd.Series()
         
-        return self.utilizations.idxmax(axis=1)
+        util_df = _dict_to_dataframe(self.utilizations)
+        return util_df.idxmax(axis=1)
     
     def summary(self) -> pd.DataFrame:
         """
@@ -223,12 +266,12 @@ class EngineeringProcedure:
         Returns:
             DataFrame with results, status, and utilization
         """
-        summary_df = self.results.copy()
+        summary_df = _dict_to_dataframe(self.results)
         
-        if not self.status_log.empty:
+        if self.status_log:
             summary_df['worst_status'] = self.get_worst_status()
         
-        if not self.utilizations.empty:
+        if self.utilizations:
             summary_df['worst_util'] = self.get_worst_utilization()
             summary_df['governing_check'] = self.get_governing_check()
         

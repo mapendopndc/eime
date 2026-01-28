@@ -104,9 +104,9 @@ def stiffness_modulus_of_elasticity(E: float, K_SE: float, K_T: float) -> Engine
     return create_formula(
         name="E_S",
         params={
-            "E": Param("E", desc="specified modulus of elasticity"),
-            "K_SE": Param("K_{{SE}}", desc="service-condition factor"),
-            "K_T": Param("K_T", desc="treatment factor")
+            "E": Param("E", unit="MPa", desc="specified modulus of elasticity"),
+            "K_SE": Param("K_{SE}", unit="dimensionless", desc="service-condition factor"),
+            "K_T": Param("K_T", unit="dimensionless", desc="treatment factor")
         },
         logic=lambda E, K_SE, K_T: E * K_SE * K_T,
         latex_template=lambda E, K_SE, K_T: f"{E} \\cdot {K_SE} \\cdot {K_T}",

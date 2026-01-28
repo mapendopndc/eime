@@ -10,7 +10,9 @@ import numpy as np
 import pandas as pd
 
 try:
-    from pint import Quantity, DimensionalityError
+    from pint import Quantity, DimensionalityError, UnitRegistry
+    # Create a shared unit registry for the entire EIME package
+    ureg = UnitRegistry()
 except ImportError:
     raise ImportError(
         "Pint is required for unit handling. Install with: pip install pint>=0.23"

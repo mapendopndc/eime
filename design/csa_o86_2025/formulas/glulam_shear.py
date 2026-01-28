@@ -38,12 +38,12 @@ def g_factor(l_a: float, V_A: float, V_B: float, V_C: float) -> EngineeringFormu
     return create_formula(
         name="G",
         params={
-            "l_a": Param("l_a", desc="segment length"),
-            "V_A": Param("V_A", desc="shear force at beginning of segment"),
-            "V_B": Param("V_B", desc="shear force at end of segment"),
-            "V_C": Param("V_C", desc="shear force at centre of segment")
+            "l_a": Param("l_a", unit="mm", desc="segment length"),
+            "V_A": Param("V_A", unit="N", desc="shear force at beginning of segment"),
+            "V_B": Param("V_B", unit="N", desc="shear force at end of segment"),
+            "V_C": Param("V_C", unit="N", desc="shear force at centre of segment")
         },
-        logic=lambda l_a, V_A, V_B, V_C: np.abs(l_a * (V_A**5 + V_B**5 + (4*V_C)**5)),
+        logic=lambda l_a, V_A, V_B, V_C: np.abs(l_a * (V_A**5 + V_B**5 + 4 * V_C**5)),
         latex_template=lambda l_a, V_A, V_B, V_C: f"{l_a} \\left[ {V_A}^5 + {V_B}^5 + 4 \\cdot {V_C}^5 \\right]",
         source="CSA O86:24 7.5.7.6 c)",
         desc="Shear Factor G"
@@ -80,9 +80,9 @@ def shear_load_coefficient(W_f: float, L: float, Sum_G: float) -> EngineeringFor
     return create_formula(
         name="C_V",
         params={
-            "W_f": Param("W_f", desc="total factored loads on beam"),
-            "L": Param("L", desc="length of beam"),
-            "Sum_G": Param("\\sum G", desc="sum of G factors")
+            "W_f": Param("W_f", unit="N", desc="total factored loads on beam"),
+            "L": Param("L", unit="mm", desc="length of beam"),
+            "Sum_G": Param("\\sum G", unit="N**5*mm", desc="sum of G factors")
         },
         logic=lambda W_f, L, Sum_G: 1.825 * W_f * (L / Sum_G)**0.2,
         latex_template=lambda W_f, L, Sum_G: f"1.825 \\cdot {W_f} \\left( \\frac{{{L}}}{{{Sum_G}}} \\right)^{{0.2}}",
@@ -128,7 +128,7 @@ def modified_shear_strength(f_v: float, K_D: float, K_H: float, K_Sv: float, K_T
             "f_v": Param("f_v", unit="MPa", desc="specified shear strength"),
             "K_D": Param("K_D", unit="dimensionless", desc="load-duration factor"),
             "K_H": Param("K_H", unit="dimensionless", desc="system factor"),
-            "K_Sv": Param("K_{{Sv}}", unit="dimensionless", desc="service condition factor"),
+            "K_Sv": Param("K_{Sv}", unit="dimensionless", desc="service condition factor"),
             "K_T": Param("K_T", unit="dimensionless", desc="treatment factor")
         },
         logic=lambda f_v, K_D, K_H, K_Sv, K_T: f_v * K_D * K_H * K_Sv * K_T,
@@ -172,14 +172,14 @@ def total_shear_resistance(phi: float, F_v: float, A_g: float, C_V: float, Z: fl
     return create_formula(
         name="W_r",
         params={
-            "phi": Param("\\phi", desc="shear resistance modification factor"),
-            "F_v": Param("F_v", desc="factored strength in shear"),
-            "A_g": Param("A_g", desc="gross cross-sectional area, mm²"),
-            "C_V": Param("C_V", desc="shear load coefficient"),
-            "Z": Param("Z", desc="beam volume, m³")
+            "phi": Param("\\phi", unit="dimensionless", desc="shear resistance modification factor"),
+            "F_v": Param("F_v", unit="MPa", desc="factored strength in shear"),
+            "A_g": Param("A_g", unit="mm**2", desc="gross cross-sectional area, mm²"),
+            "C_V": Param("C_V", unit="dimensionless", desc="shear load coefficient"),
+            "Z": Param("Z", unit="mm**3", desc="beam volume, mm³")
         },
         logic=lambda phi, F_v, A_g, C_V, Z: phi * F_v * 0.48 * A_g * C_V * Z**(-0.18),
-        latex_template=lambda phi, F_v, A_g, C_V, Z: f"{phi} \\cdot {F_v} \\cdot 0.48 \\cdot {A_g} \\cdot {C_V} \\cdot {Z}^{{-0.18}}",
+        latex_template=lambda phi, F_v, A_g, C_V, Z: f"{phi} \\cdot {F_v} \\cdot 0.48 \\cdot {A_g} \\cdot {C_V} \\cdot \\left({Z}\\right)^{{-0.18}}",
         source="CSA O86:24 7.5.7.3 a)",
         desc="Total Shear Resistance"
     )
@@ -222,10 +222,11 @@ def shear_resistance(phi: float, F_v: float, A_g: float, V_f: float = None) -> E
         params={
             "phi": Param(r"\phi", unit="dimensionless", desc="shear resistance modification factor"),
             "F_v": Param("F_v", unit="MPa", desc="factored strength in shear"),
-            "A_g": Param("A_g", unit="mm**2", desc="gross cross-sectional area, mm²")
+            "A_g": Param("A_g", unit="mm**2", desc="gross cross-sectional area, mm²"),
+            "V_f": Param("V_f", unit="N", desc="factored shear force")
         },
-        logic=lambda phi, F_v, A_g: phi * F_v * 2 * A_g / 3,
-        latex_template=lambda phi, F_v, A_g: f"{phi} \\cdot {F_v} \\cdot \\frac{{2 \\cdot {A_g}}}{{3}}",
+        logic=lambda phi, F_v, A_g, V_f=None: phi * F_v * 2 * A_g / 3,
+        latex_template=lambda phi, F_v, A_g, V_f=None: f"{phi} \\cdot {F_v} \\cdot \\frac{{2 \\cdot {A_g}}}{{3}}",
         result_unit='N',  # MPa * mm^2 = N
         source="CSA O86:24 7.5.7.3 b)",
         checks=[

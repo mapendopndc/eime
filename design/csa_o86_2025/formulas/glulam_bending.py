@@ -3,7 +3,7 @@ Glulam bending resistance formulas per CSA O86-2025.
 """
 
 import numpy as np
-from eime import create_formula, create_switch, Param, Check, STATUS, EngineeringFormula, EngineeringSwitch, formula
+from eime import create_formula, create_switch, Param, Check, STATUS, EngineeringFormula, EngineeringSwitch, formula, switch
 
 
 @formula
@@ -89,7 +89,7 @@ def modified_bending_strength(f_b: float, K_D: float, K_H: float, K_Sb: float, K
             "f_b": Param("f_b", unit="MPa", desc="specified bending strength"),
             "K_D": Param("K_D", unit="dimensionless", desc="load-duration factor"),
             "K_H": Param("K_H", unit="dimensionless", desc="system factor"),
-            "K_Sb": Param("K_{{Sb}}", unit="dimensionless", desc="service condition factor"),
+            "K_Sb": Param("K_{Sb}", unit="dimensionless", desc="service condition factor"),
             "K_T": Param("K_T", unit="dimensionless", desc="treatment factor")
         },
         logic=lambda f_b, K_D, K_H, K_Sb, K_T: f_b * K_D * K_H * K_Sb * K_T,
@@ -181,9 +181,9 @@ def slenderness_ratio(L_u: float, d: float, b: float) -> EngineeringFormula:
     return create_formula(
         name="\\lambda",
         params={
-            "L_u": Param("L_u", desc="unbraced segment length"),
-            "d": Param("d", desc="depth"),
-            "b": Param("b", desc="width")
+            "L_u": Param("L_u", unit="mm", desc="unbraced segment length"),
+            "d": Param("d", unit="mm", desc="depth"),
+            "b": Param("b", unit="mm", desc="width")
         },
         logic=lambda L_u, d, b: np.sqrt(L_u * d / b**2),
         latex_template=lambda L_u, d, b: f"\\sqrt{{\\frac{{{L_u} \\cdot {d}}}{{{b}^2}}}}",
@@ -226,10 +226,10 @@ def slenderness_ratio_limit(E: float, K_SE: float, K_T: float, F_b: float) -> En
     return create_formula(
         name="\\lambda_e",
         params={
-            "E": Param("E", desc="specified modulus of elasticity"),
-            "K_SE": Param("K_{{SE}}", desc="service condition factor"),
-            "K_T": Param("K_T", desc="treatment factor"),
-            "F_b": Param("F_b", desc="modified bending strength")
+            "E": Param("E", unit="MPa", desc="specified modulus of elasticity"),
+            "K_SE": Param("K_{SE}", unit="dimensionless", desc="service condition factor"),
+            "K_T": Param("K_T", unit="dimensionless", desc="treatment factor"),
+            "F_b": Param("F_b", unit="MPa", desc="modified bending strength")
         },
         logic=lambda E, K_SE, K_T, F_b: np.sqrt(0.97 * E * K_SE * K_T / F_b),
         latex_template=lambda E, K_SE, K_T, F_b: f"\\sqrt{{\\frac{{0.97 \\cdot {E} \\cdot {K_SE} \\cdot {K_T}}}{{{F_b}}}}}",
@@ -261,6 +261,7 @@ def lateral_stability_factor_a() -> EngineeringFormula:
         params={},
         logic=lambda: 1.0,
         latex_template=lambda: "1.0",
+        result_unit='dimensionless',
         source="CSA O86:24 7.5.6.5.2 a)",
         desc="Lateral Stability Factor a)"
     )
@@ -294,8 +295,8 @@ def lateral_stability_factor_b(lambda_1: float, lambda_e: float) -> EngineeringF
     return create_formula(
         name="K_L",
         params={
-            "lambda_1": Param("\\lambda", desc="slenderness ratio"),
-            "lambda_e": Param("\\lambda_e", desc="slenderness ratio limit")
+            "lambda_1": Param("\\lambda", unit="dimensionless", desc="slenderness ratio"),
+            "lambda_e": Param("\\lambda_e", unit="dimensionless", desc="slenderness ratio limit")
         },
         logic=lambda lambda_1, lambda_e: 1 - (1/3) * (lambda_1/lambda_e)**4,
         latex_template=lambda lambda_1, lambda_e: f"1 - \\frac{{1}}{{3}}\\left(\\frac{{{lambda_1}}}{{{lambda_e}}}\\right)^4",
@@ -304,6 +305,7 @@ def lateral_stability_factor_b(lambda_1: float, lambda_e: float) -> EngineeringF
     )
 
 
+@switch
 def lateral_stability_factor(
     lambda1: float,
     lambda_e: float,
@@ -349,12 +351,12 @@ def lateral_stability_factor(
     return create_switch(
         name="K_L",
         params={
-            "lambda1": Param("\\lambda", desc="slenderness ratio"),
-            "lambda_e": Param("\\lambda_e", desc="slenderness ratio limit"),
-            "KL_a": Param("K_L", desc="lateral stability factor output a)"),
-            "KL_b": Param("K_L", desc="lateral stability factor output b)"),
-            "KL_c": Param("K_L", desc="lateral stability factor output c)"),
-            "KL_d": Param("K_L", desc="lateral stability factor output d)")
+            "lambda1": Param("\\lambda", unit="dimensionless", desc="slenderness ratio"),
+            "lambda_e": Param("\\lambda_e", unit="dimensionless", desc="slenderness ratio limit"),
+            "KL_a": Param("K_L", unit="dimensionless", desc="lateral stability factor output a)"),
+            "KL_b": Param("K_L", unit="dimensionless", desc="lateral stability factor output b)"),
+            "KL_c": Param("K_L", unit="dimensionless", desc="lateral stability factor output c)"),
+            "KL_d": Param("K_L", unit="dimensionless", desc="lateral stability factor output d)")
         },
         bounds=[10, lambda_e, 50],
         outputs=[KL_a, KL_b, KL_c, KL_d],
@@ -404,16 +406,17 @@ def moment_resistance_a(phi: float, F_b: float, S: float, K_x: float, K_Zbg: flo
             "F_b": Param("F_b", unit="MPa", desc="modified bending strength"),
             "S": Param("S", unit="mm**3", desc="section modulus"),
             "K_x": Param("K_x", unit="dimensionless", desc="curvature factor"),
-            "K_Zbg": Param("K_{{Zbg}}", unit="dimensionless", desc="size factor")
+            "K_Zbg": Param("K_{Zbg}", unit="dimensionless", desc="size factor")
         },
         logic=lambda phi, F_b, S, K_x, K_Zbg: phi * F_b * S * K_x * K_Zbg,
         latex_template=lambda phi, F_b, S, K_x, K_Zbg: f"{phi} \\cdot {F_b} \\cdot {S} \\cdot {K_x} \\cdot {K_Zbg}",
         source="CSA O86:24 7.5.6.6.1 a)",
-        result_unit="kN*m",
+        result_unit="N*mm",
         desc="Moment Resistance a)"
     )
 
 
+@formula
 def moment_resistance_b1(phi: float, F_b: float, S: float, K_x: float, K_Zbg: float) -> EngineeringFormula:
     """
     Factored bending moment resistance (unbraced, case b, part i).
@@ -451,16 +454,17 @@ def moment_resistance_b1(phi: float, F_b: float, S: float, K_x: float, K_Zbg: fl
             "F_b": Param("F_b", unit="MPa", desc="modified bending strength"),
             "S": Param("S", unit="mm**3", desc="section modulus"),
             "K_x": Param("K_x", unit="dimensionless", desc="curvature factor"),
-            "K_Zbg": Param("K_{{Zbg}}", unit="dimensionless", desc="size factor")
+            "K_Zbg": Param("K_{Zbg}", unit="dimensionless", desc="size factor")
         },
         logic=lambda phi, F_b, S, K_x, K_Zbg: phi * F_b * S * K_x * K_Zbg,
         latex_template=lambda phi, F_b, S, K_x, K_Zbg: f"{phi} \\cdot {F_b} \\cdot {S} \\cdot {K_x} \\cdot {K_Zbg}",
         source="CSA O86:24 7.5.6.6.1 b)",
-        result_unit="kN*m",
+        result_unit="N*mm",
         desc="Moment Resistance b) i)"
     )
 
 
+@formula
 def moment_resistance_b2(phi: float, F_b: float, S: float, K_x: float, K_L: float) -> EngineeringFormula:
     """
     Factored bending moment resistance (unbraced, case b, part ii).
@@ -503,13 +507,13 @@ def moment_resistance_b2(phi: float, F_b: float, S: float, K_x: float, K_L: floa
         logic=lambda phi, F_b, S, K_x, K_L: phi * F_b * S * K_x * K_L,
         latex_template=lambda phi, F_b, S, K_x, K_L: f"{phi} \\cdot {F_b} \\cdot {S} \\cdot {K_x} \\cdot {K_L}",
         source="CSA O86:24 7.5.6.6.1 b)",
-        result_unit="kN*m",
+        result_unit="N*mm",
         desc="Moment Resistance b) ii)"
     )
 
 
 @formula
-def moment_resistance_b(M_r1: float, M_r2: float) -> EngineeringSwitch:
+def moment_resistance_b(M_r1: float, M_r2: float) -> EngineeringFormula:
     """
     Factored bending moment resistance (selects minimum of case b formulas).
     
@@ -522,8 +526,8 @@ def moment_resistance_b(M_r1: float, M_r2: float) -> EngineeringSwitch:
         
     Returns
     -------
-    EngineeringSwitch
-        Switch formula for moment resistance (case b)
+    EngineeringFormula
+        Formula for moment resistance (case b)
         
     Notes
     -----
@@ -533,14 +537,14 @@ def moment_resistance_b(M_r1: float, M_r2: float) -> EngineeringSwitch:
     ----------
     CSA O86:24 7.5.6.6.1 b)
     """
-    return create_switch(
+    return create_formula(
         name="M_{r,b}",
         params={
-            "M_r1": Param("M_{{r1}}", desc="resistance based on K_Zbg"),
-            "M_r2": Param("M_{{r2}}", desc="resistance based on K_L")
+            "M_r1": Param("M_{{r1}}", unit="N*mm", desc="resistance based on K_Zbg"),
+            "M_r2": Param("M_{{r2}}", unit="N*mm", desc="resistance based on K_L")
         },
-        bounds=[M_r2],
-        outputs=[M_r1, M_r2],
+        logic=lambda M_r1, M_r2: np.minimum(M_r1, M_r2),
+        latex_template=lambda M_r1, M_r2: f"\\min({M_r1}, {M_r2})",
         source="CSA O86:24 7.5.6.6.1 b)",
         desc="Moment Resistance b)"
     )
@@ -570,6 +574,7 @@ def moment_resistance(K_L: float, M_rA: float, M_rB: float, M_f: float = None) -
     Notes
     -----
     Selects M_rA if K_L = 1.0 (fully braced), otherwise M_rB.
+    Switch logic: if K_L > 0.9999, use M_rA (braced), else use M_rB (unbraced).
     
     Checks:
         - Factored force must not exceed resistance
@@ -581,11 +586,11 @@ def moment_resistance(K_L: float, M_rA: float, M_rB: float, M_f: float = None) -
     return create_switch(
         name="M_r",
         params={
-            "K_L": Param("K_L", desc="lateral stability factor"),
-            "M_rA": Param("M_r", desc="resistance A (braced)"),
-            "M_rB": Param("M_r", desc="resistance B (unbraced)")
+            "K_L": Param("K_L", unit="dimensionless", desc="lateral stability factor"),
+            "M_rA": Param("M_r", unit="N*mm", desc="resistance A (braced)"),
+            "M_rB": Param("M_r", unit="N*mm", desc="resistance B (unbraced)")
         },
-        bounds=[1.0],
+        bounds=[0.9999],
         outputs=[M_rB, M_rA],
         source="CSA O86:24 7.5.6.6.1",
         checks=[

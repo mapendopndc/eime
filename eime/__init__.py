@@ -12,6 +12,7 @@ from .formula import (
     EngineeringFormula,
     EngineeringSwitch,
     formula,
+    switch,
     create_formula,
     create_switch,
 )

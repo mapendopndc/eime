@@ -305,46 +305,36 @@ class EngineeringFormula(EngineeringFunction):
         
         # Execute calculation based on result_unit setting
         try:
-            # Always perform calculation with Pint Quantities for unit propagation
-            result = self.logic(**validated_inputs)
-            
-            # Validate result is a Quantity
-            if not is_quantity(result):
-                raise UnitError(
-                    f"Formula '{self.name}' must return a Pint Quantity. "
-                    f"Ensure the calculation function returns a Quantity object."
-                )
-            
-            # If result_unit specified, try to convert result
             if self.result_unit is not None:
-                try:
-                    # Try converting the Pint result to the desired unit
-                    self.result = result.to(self.result_unit)
-                except Exception as e:
-                    # Conversion failed - units are incompatible
-                    # Fall back to magnitude mode with warning
-                    import warnings
-                    warnings.warn(
-                        f"Formula '{self.name}': Cannot convert result units '{result.units}' "
-                        f"to '{self.result_unit}' (dimensionally incompatible). "
-                        f"Falling back to magnitude mode - verify correctness. Error: {str(e)}",
-                        UserWarning,
-                        stacklevel=2
-                    )
-                    
-                    # Extract magnitudes and wrap with result_unit
-                    magnitude_inputs = {}
-                    for key, value in validated_inputs.items():
-                        param = self.params[key]
-                        magnitude_inputs[key] = extract_magnitude(value, param.unit)
-                    
-                    result_magnitude = self.logic(**magnitude_inputs)
-                    ureg = result._REGISTRY
-                    self.result = result_magnitude * ureg(self.result_unit)
+                # Magnitude mode: convert inputs to expected units, compute floats
+                magnitude_inputs = {}
+                for key, value in validated_inputs.items():
+                    param = self.params[key]
+                    magnitude_inputs[key] = extract_magnitude(value, param.unit)
+
+                result_magnitude = self.logic(**magnitude_inputs)
+
+                # Wrap result in the declared unit using the input registry when available
+                if first_quantity is not None:
+                    ureg = first_quantity._REGISTRY
+                else:
+                    from pint import UnitRegistry
+                    ureg = UnitRegistry()
+
+                self.result = result_magnitude * ureg(self.result_unit)
             else:
-                # No unit conversion requested, use natural result
+                # Quantity mode: let Pint propagate units
+                result = self.logic(**validated_inputs)
+
+                # Validate result is a Quantity
+                if not is_quantity(result):
+                    raise UnitError(
+                        f"Formula '{self.name}' must return a Pint Quantity. "
+                        f"Ensure the calculation function returns a Quantity object."
+                    )
+
                 self.result = result
-                
+
         except Exception as e:
             raise RuntimeError(
                 f"Error executing formula '{self.name}': {str(e)}\n"
@@ -462,38 +452,108 @@ class EngineeringSwitch(EngineeringFunction):
             )
     
     def solve(self) -> EngineeringSwitch:
-        """Execute the switch logic."""
-        # Extract input values
+        """Execute the switch logic with unit-aware vectorized operations."""
+        # If already solved, return immediately (idempotent behavior)
+        if self.result is not None:
+            return self
+        
+        # Extract input values and handle formula substitutions
         self.solved_inputs = list(self.inputs.values())
         for idx, key in enumerate(self.inputs.keys()):
             value = self.inputs[key]
             if isinstance(value, EngineeringFunction):
+                self.substitutions.append(value)
+                # Auto-solve if not already solved
+                if value.result is None:
+                    value = value.solve()
                 self.solved_inputs[idx] = value.result
+                self.inputs[key] = value.result
         
-        # Extract output values
+        # Validate input parameter units
+        for key, value in self.inputs.items():
+            if key in self.params:
+                param = self.params[key]
+                validate_quantity(value, key, param.unit)
+        
+        # Extract output values and track units
         self.solved_outputs = []
+        output_unit = None
+        first_quantity = None
+        
         for output in self.outputs:
             if isinstance(output, EngineeringFunction):
-                self.solved_outputs.append(output.result)
+                # Auto-solve if not already solved
+                if output.result is None:
+                    output = output.solve()
+                output_val = output.result
             else:
-                self.solved_outputs.append(output)
+                output_val = output
+            
+            # Track unit from first Pint Quantity output
+            if is_quantity(output_val) and output_unit is None:
+                output_unit = str(output_val.units)
+                first_quantity = output_val
+                
+            self.solved_outputs.append(output_val)
         
         # Extract bound values
         self.solved_bounds = []
         for bound in self.bounds:
             if isinstance(bound, EngineeringFunction):
+                # Auto-solve if not already solved
+                if bound.result is None:
+                    bound = bound.solve()
                 self.solved_bounds.append(bound.result)
             else:
                 self.solved_bounds.append(bound)
         
-        # Apply switch logic using numpy.where
-        input_array = np.array(self.solved_inputs[0], dtype=float)
-        result = self.solved_outputs[0]
+        # Get input value - extract magnitude if it's a Pint Quantity
+        input_val = self.solved_inputs[0]
+        if is_quantity(input_val):
+            # Get the parameter to know expected unit
+            param = list(self.params.values())[0]
+            input_array = extract_magnitude(input_val, param.unit)
+            if first_quantity is None:
+                first_quantity = input_val
+        else:
+            # Legacy support for raw floats/arrays
+            input_array = np.atleast_1d(input_val).astype(float)
         
-        for i, bound in enumerate(self.solved_bounds):
-            result = np.where(input_array > bound, self.solved_outputs[i + 1], result)
+        # Extract magnitudes from bounds if they're Pint Quantities
+        bounds_array = []
+        for bound in self.solved_bounds:
+            if is_quantity(bound):
+                param = list(self.params.values())[0]
+                bounds_array.append(extract_magnitude(bound, param.unit))
+            else:
+                bounds_array.append(float(bound))
         
-        self.result = result
+        # Extract magnitudes from outputs if they're Pint Quantities
+        outputs_array = []
+        for output in self.solved_outputs:
+            if is_quantity(output):
+                outputs_array.append(extract_magnitude(output, output_unit))
+            else:
+                outputs_array.append(output)
+        
+        # Apply switch logic using numpy.where for vectorization
+        result_magnitude = outputs_array[0]
+        
+        for i, bound in enumerate(bounds_array):
+            result_magnitude = np.where(
+                input_array > bound, 
+                outputs_array[i + 1], 
+                result_magnitude
+            )
+        
+        # Wrap result back in appropriate units
+        if output_unit is not None and first_quantity is not None:
+            ureg = first_quantity._REGISTRY
+            self.result = result_magnitude * ureg(output_unit)
+            self.result_units = output_unit
+        else:
+            self.result = result_magnitude
+        
         return self
     
     def generate_function_latex(self, index: int) -> str:
@@ -527,7 +587,11 @@ class EngineeringSwitch(EngineeringFunction):
         output_strs = []
         for output in self.outputs:
             if isinstance(output, EngineeringFunction):
-                output_strs.append(output.generate_latex(index))
+                # Use generate_function_latex to get just the equation without align* wrapper
+                # Wrap in aligned environment for proper nesting within the parent align*
+                func_latex = output.generate_function_latex(index)
+                # Use aligned[t] for top-alignment to match baseline
+                output_strs.append(f"\\begin{{aligned}}[t]\n{func_latex}\n\\end{{aligned}}")
             else:
                 output_strs.append(str(self._get_value_at_index(output, index)))
         
@@ -554,7 +618,19 @@ class EngineeringSwitch(EngineeringFunction):
     
     def _get_value_at_index(self, value: Any, index: int) -> float:
         """Extract value at specific index from various types."""
-        if isinstance(value, (float, int)):
+        # Handle Pint Quantities
+        if is_quantity(value):
+            mag = value.magnitude
+            if isinstance(mag, (float, int)):
+                return float(mag)
+            elif isinstance(mag, pd.Series):
+                return float(mag.iloc[index])
+            elif isinstance(mag, np.ndarray):
+                return float(mag[index])
+            else:
+                return float(mag)
+        # Handle raw values
+        elif isinstance(value, (float, int)):
             return float(value)
         elif isinstance(value, pd.Series):
             return float(value.iloc[index])
@@ -625,6 +701,65 @@ def formula(func: Callable) -> Callable:
         Wrapped function that auto-executes the formula
     """
     return FormulaWrapper(func)
+
+
+# Switch wrapper (same pattern as FormulaWrapper)
+class SwitchWrapper:
+    """Wrapper class for @switch decorator."""
+    
+    def __init__(self, func: Callable) -> None:
+        """Initialize wrapper."""
+        self._func = func
+        # Preserve function metadata
+        self.__doc__ = func.__doc__
+        self.__name__ = func.__name__
+        self.__module__ = func.__module__
+        self.__qualname__ = func.__qualname__
+        self.__annotations__ = func.__annotations__
+        self.__wrapped__ = func
+    
+    def __call__(self, *args, **kwargs) -> EngineeringSwitch:
+        """Execute the wrapped function."""
+        # Get parameter names from function signature
+        param_names = list(signature(self._func).parameters.keys())
+        
+        # Convert positional args to kwargs
+        for i, arg in enumerate(args):
+            if i < len(param_names):
+                kwargs[param_names[i]] = arg
+        
+        # Call the function to get EngineeringSwitch object
+        result = self._func(**kwargs)
+        
+        # Add inputs, solve, and run checks
+        return result.add_inputs(**kwargs).solve().run_checks()
+    
+    def __repr__(self) -> str:
+        return f"<Switch: {self._func.__name__}>"
+
+
+def switch(func: Callable) -> Callable:
+    """
+    Decorator for creating switch functions.
+    
+    Example:
+        @switch
+        def K_factor(lambda1, lambda_e, KL_a, KL_b):
+            return create_switch(
+                name="K_L",
+                params={"lambda1": Param("\\lambda", unit="dimensionless")},
+                bounds=[10, lambda_e],
+                outputs=[KL_a, KL_b]
+            )
+    
+    Args:
+        func: Function returning an EngineeringSwitch
+        
+    Returns:
+        Wrapped function that auto-executes the switch
+    """
+    return SwitchWrapper(func)
+
 
 
 def create_formula(

@@ -1,0 +1,47 @@
+{
+  "code": "NBCC 2020",
+  "type": "ULS",
+  "description": "Simplified ULS load combinations for preliminary design.",
+  "combos": [
+    {
+      "name": "1.25D+1.5L",
+      "factors": {"D": 1.25, "L": 1.5},
+      "tags": []
+    },
+    {
+      "name": "1.25D+1.5S",
+      "factors": {"D": 1.25, "S": 1.5},
+      "tags": []
+    },
+    {
+      "name": "1.25D+1.5L+0.5S",
+      "factors": {"D": 1.25, "L": 1.5, "S": 0.5},
+      "tags": []
+    },
+    {
+      "name": "1.25D+1.5S+0.5L",
+      "factors": {"D": 1.25, "S": 1.5, "L": 0.5},
+      "tags": []
+    },
+    {
+      "name": "1.25D+1.4W+0.5L+0.5S",
+      "factors": {"D": 1.25, "W": 1.4, "L": 0.5, "S": 0.5},
+      "tags": ["wind"]
+    },
+    {
+      "name": "0.9D+1.4W",
+      "factors": {"D": 0.9, "W": 1.4},
+      "tags": ["wind"]
+    },
+    {
+      "name": "1.0D+1.0E",
+      "factors": {"D": 1.0, "E": 1.0},
+      "tags": ["seismic"]
+    },
+    {
+      "name": "0.9D+1.0E",
+      "factors": {"D": 0.9, "E": 1.0},
+      "tags": ["seismic"]
+    }
+  ]
+}

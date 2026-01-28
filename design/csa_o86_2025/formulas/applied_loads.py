@@ -22,7 +22,7 @@ def applied_moment(M_f: float) -> EngineeringFormula:
     """
     return create_formula(
         name="M_f",
-        params={"M_f": Param("M_f", desc="factored applied moment")},
+        params={"M_f": Param("M_f", unit="N*mm", desc="factored applied moment")},
         logic=lambda M_f: M_f,
         latex_template=lambda M_f: f"{M_f}",
         source="",
@@ -47,7 +47,7 @@ def applied_shear(V_f: float) -> EngineeringFormula:
     """
     return create_formula(
         name="V_f",
-        params={"V_f": Param("V_f", desc="factored applied shear")},
+        params={"V_f": Param("V_f", unit="N", desc="factored applied shear")},
         logic=lambda V_f: V_f,
         latex_template=lambda V_f: f"{V_f}",
         source="",
@@ -72,7 +72,7 @@ def applied_compression(P_f: float) -> EngineeringFormula:
     """
     return create_formula(
         name="P_f",
-        params={"P_f": Param("P_f", desc="factored applied compression")},
+        params={"P_f": Param("P_f", unit="N", desc="factored applied compression")},
         logic=lambda P_f: P_f,
         latex_template=lambda P_f: f"{P_f}",
         source="",

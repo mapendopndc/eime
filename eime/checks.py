@@ -14,12 +14,14 @@ import pandas as pd
 
 # Import unit handling
 try:
-    from .units import is_quantity, extract_magnitude
+    from .units import is_quantity, extract_magnitude, get_compact_unit_string
 except ImportError:
     def is_quantity(value):
         return False
     def extract_magnitude(value, target_unit=None):
         return value
+    def get_compact_unit_string(value):
+        return ""
 
 
 class STATUS(IntEnum):
@@ -210,13 +212,33 @@ class Upperbound(EngineeringCheck):
         """Generate LaTeX representation of upper bound check."""
         result_val = self._get_single_value(self.formula.result, index)
         
+        # Get unit string from the formula result
+        unit_str = get_compact_unit_string(self.formula.result)
+        if unit_str:
+            # Handle composite units with \cdot properly
+            if '\\cdot' in unit_str:
+                import re
+                parts = unit_str.split(' \\cdot ')
+                formatted_parts = []
+                for part in parts:
+                    part = part.strip()
+                    match = re.match(r'^([a-zA-Z]+)(\^\{\d+\})?$', part)
+                    if match:
+                        unit_name, superscript = match.groups()
+                        formatted_parts.append(f'\\text{{{unit_name}}}{superscript if superscript else ""}')
+                    else:
+                        formatted_parts.append(f'\\text{{{part}}}')
+                unit_str = f" \\, {' \\cdot '.join(formatted_parts)}"
+            else:
+                unit_str = f" \\, \\text{{{unit_str}}}"
+        
         # Get bound value
         from .formula import EngineeringFunction
         if isinstance(self.upperbound, EngineeringFunction):
             bound_val = self._get_single_value(self.upperbound.result, index)
             bound_str = self.upperbound.name
         else:
-            bound_val = float(self.upperbound)
+            bound_val = self._get_single_value(self.upperbound, index)
             bound_str = str(bound_val)
         
         # Determine pass/fail
@@ -232,7 +254,7 @@ class Upperbound(EngineeringCheck):
         
         check_text = (
             f"{self.formula.name} {operator} {bound_str}"
-            f"&= {result_val:.2f} {operator} {bound_val:.2f} \\\\ "
+            f"&= {result_val:.2f}{unit_str} {operator} {bound_val:.2f}{unit_str} \\\\ "
             f"\\text{{Check}} &= \\text{{{status_msg}}}"
         )
         
@@ -307,13 +329,33 @@ class Lowerbound(EngineeringCheck):
         """Generate LaTeX representation of lower bound check."""
         result_val = self._get_single_value(self.formula.result, index)
         
+        # Get unit string from the formula result
+        unit_str = get_compact_unit_string(self.formula.result)
+        if unit_str:
+            # Handle composite units with \cdot properly
+            if '\\cdot' in unit_str:
+                import re
+                parts = unit_str.split(' \\cdot ')
+                formatted_parts = []
+                for part in parts:
+                    part = part.strip()
+                    match = re.match(r'^([a-zA-Z]+)(\^\{\d+\})?$', part)
+                    if match:
+                        unit_name, superscript = match.groups()
+                        formatted_parts.append(f'\\text{{{unit_name}}}{superscript if superscript else ""}')
+                    else:
+                        formatted_parts.append(f'\\text{{{part}}}')
+                unit_str = f" \\, {' \\cdot '.join(formatted_parts)}"
+            else:
+                unit_str = f" \\, \\text{{{unit_str}}}"
+        
         # Get bound value
         from .formula import EngineeringFunction
         if isinstance(self.lowerbound, EngineeringFunction):
             bound_val = self._get_single_value(self.lowerbound.result, index)
             bound_str = self.lowerbound.name
         else:
-            bound_val = float(self.lowerbound)
+            bound_val = self._get_single_value(self.lowerbound, index)
             bound_str = str(bound_val)
         
         # Determine pass/fail
@@ -329,7 +371,7 @@ class Lowerbound(EngineeringCheck):
         
         check_text = (
             f"{self.formula.name} {operator} {bound_str}"
-            f"&= {result_val:.2f} {operator} {bound_val:.2f} \\\\ "
+            f"&= {result_val:.2f}{unit_str} {operator} {bound_val:.2f}{unit_str} \\\\ "
             f"\\text{{Check}} &= \\text{{{status_msg}}}"
         )
         
@@ -368,12 +410,22 @@ class Equality(EngineeringCheck):
     
     def check(self) -> EngineeringCheck:
         """Evaluate equality check."""
-        result = np.array(self.formula.result, dtype=float)
+        # Extract magnitude from result (handle Quantities)
+        if is_quantity(self.formula.result):
+            result = np.array(extract_magnitude(self.formula.result), dtype=float)
+        else:
+            result = np.array(self.formula.result, dtype=float)
         
         # Extract expected value
         from .formula import EngineeringFunction
         if isinstance(self.expected_value, EngineeringFunction):
-            expected = np.array(self.expected_value.result, dtype=float)
+            expected_result = self.expected_value.result
+            if is_quantity(expected_result):
+                expected = np.array(extract_magnitude(expected_result), dtype=float)
+            else:
+                expected = np.array(expected_result, dtype=float)
+        elif is_quantity(self.expected_value):
+            expected = np.array(extract_magnitude(self.expected_value), dtype=float)
         else:
             expected = self.expected_value
         
@@ -392,12 +444,32 @@ class Equality(EngineeringCheck):
         """Generate LaTeX representation of equality check."""
         result_val = self._get_single_value(self.formula.result, index)
         
+        # Get unit string from the formula result
+        unit_str = get_compact_unit_string(self.formula.result)
+        if unit_str:
+            # Handle composite units with \cdot properly
+            if '\\cdot' in unit_str:
+                import re
+                parts = unit_str.split(' \\cdot ')
+                formatted_parts = []
+                for part in parts:
+                    part = part.strip()
+                    match = re.match(r'^([a-zA-Z]+)(\^\{\d+\})?$', part)
+                    if match:
+                        unit_name, superscript = match.groups()
+                        formatted_parts.append(f'\\text{{{unit_name}}}{superscript if superscript else ""}')
+                    else:
+                        formatted_parts.append(f'\\text{{{part}}}')
+                unit_str = f" \\, {' \\cdot '.join(formatted_parts)}"
+            else:
+                unit_str = f" \\, \\text{{{unit_str}}}"
+        
         from .formula import EngineeringFunction
         if isinstance(self.expected_value, EngineeringFunction):
             expected_val = self._get_single_value(self.expected_value.result, index)
             expected_str = self.expected_value.name
         else:
-            expected_val = float(self.expected_value)
+            expected_val = self._get_single_value(self.expected_value, index)
             expected_str = str(expected_val)
         
         relative_diff = abs((result_val - expected_val) / expected_val)
@@ -408,7 +480,7 @@ class Equality(EngineeringCheck):
         
         check_text = (
             f"{self.formula.name} \\approx {expected_str}"
-            f"&= {result_val:.2f} \\approx {expected_val:.2f} \\\\ "
+            f"&= {result_val:.2f}{unit_str} \\approx {expected_val:.2f}{unit_str} \\\\ "
             f"\\text{{Check}} &= \\text{{{status_msg}}}"
         )
         

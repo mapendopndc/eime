@@ -43,7 +43,7 @@ def modified_compression_strength(f_c: float, K_D: float, K_H: float, K_Sc: floa
             "f_c": Param("f_c", unit="MPa", desc="specified compression strength"),
             "K_D": Param("K_D", unit="dimensionless", desc="load-duration factor"),
             "K_H": Param("K_H", unit="dimensionless", desc="system factor"),
-            "K_Sc": Param("K_{{Sc}}", unit="dimensionless", desc="service condition factor"),
+            "K_Sc": Param("K_{Sc}", unit="dimensionless", desc="service condition factor"),
             "K_T": Param("K_T", unit="dimensionless", desc="treatment factor")
         },
         logic=lambda f_c, K_D, K_H, K_Sc, K_T: f_c * K_D * K_H * K_Sc * K_T,
@@ -174,10 +174,10 @@ def slenderness_factor(F_c: float, K_Zcg: float, C_C: float, E_05: float, K_SE: 
         name="K_c",
         params={
             "F_c": Param("F_c", unit="MPa", desc="factored strength in compression"),
-            "K_Zcg": Param("K_{{Zcg}}", unit="dimensionless", desc="compression size factor"),
+            "K_Zcg": Param("K_{Zcg}", unit="dimensionless", desc="compression size factor"),
             "C_C": Param("C_C", unit="dimensionless", desc="compression slenderness ratio"),
-            "E_05": Param("E_{{05}}", unit="MPa", desc="fifth percentile modulus of elasticity"),
-            "K_SE": Param("K_{{SE}}", unit="dimensionless", desc="service condition factor"),
+            "E_05": Param("E_{05}", unit="MPa", desc="fifth percentile modulus of elasticity"),
+            "K_SE": Param("K_{SE}", unit="dimensionless", desc="service condition factor"),
             "K_T": Param("K_T", unit="dimensionless", desc="treatment factor")
         },
         logic=lambda F_c, K_Zcg, C_C, E_05, K_SE, K_T: 1 / (1 + F_c * K_Zcg * C_C**3 / (35 * E_05 * K_SE * K_T)),
@@ -230,12 +230,13 @@ def compression_resistance(phi: float, F_c: float, A: float, K_Zcg: float, K_C: 
             "phi": Param("\\phi", unit="dimensionless", desc="compression resistance modification factor"),
             "F_c": Param("F_c", unit="MPa", desc="factored strength in compression"),
             "A": Param("A", unit="mm^2", desc="cross-sectional area, mm²"),
-            "K_Zcg": Param("K_{{Zcg}}", unit="dimensionless", desc="compression size factor"),
-            "K_C": Param("K_C", unit="dimensionless", desc="compression slenderness factor")
+            "K_Zcg": Param("K_{Zcg}", unit="dimensionless", desc="compression size factor"),
+            "K_C": Param("K_C", unit="dimensionless", desc="compression slenderness factor"),
+            "P_f": Param("P_f", unit="N", desc="factored compressive force")
         },
-        logic=lambda phi, F_c, A, K_Zcg, K_C: phi * F_c * A * K_Zcg * K_C,
+        logic=lambda phi, F_c, A, K_Zcg, K_C, P_f=None: phi * F_c * A * K_Zcg * K_C,
         result_unit='N',  # MPa * mm^2 = N
-        latex_template=lambda phi, F_c, A, K_Zcg, K_C: f"{phi} \\cdot {F_c} \\cdot {A} \\cdot {K_Zcg} \\cdot {K_C}",
+        latex_template=lambda phi, F_c, A, K_Zcg, K_C, P_f=None: f"{phi} \\cdot {F_c} \\cdot {A} \\cdot {K_Zcg} \\cdot {K_C}",
         source="CSA O86:24 7.5.8.5",
         checks=[
             Check.lowerbound(P_f, STATUS.FAIL, 302, "Factored force exceeds resistance.")
