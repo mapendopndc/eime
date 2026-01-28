@@ -33,7 +33,7 @@ def glulam_bending_procedure(
     Parameters
     ----------
     KD : EngineeringFormula
-        Long duration factor calculation
+        Load duration factor calculation
     Fb : EngineeringFormula
         Modified bending strength calculation
     KZbg : EngineeringFormula

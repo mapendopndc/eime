@@ -10,6 +10,7 @@ from .timber_member import (
     TimberSection,
     TimberDesignParameters,
     TimberLoads,
+    TimberLoadingParameters,
     TimberBeamDesign
 )
 # Alias for backward compatibility
@@ -21,6 +22,7 @@ __all__ = [
     "TimberSection",
     "TimberDesignParameters",
     "TimberLoads",
+    "TimberLoadingParameters",
     "TimberBeamDesign",
     "TimberMemberDesign",  # Backward compatibility alias
 ]

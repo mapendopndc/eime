@@ -29,24 +29,37 @@ def _dict_to_dataframe(data_dict: Dict[str, Any]) -> pd.DataFrame:
     if not data_dict:
         return pd.DataFrame()
     
-    # Check if values are scalar or array-like
-    first_val = next(iter(data_dict.values()))
-    
     # Extract magnitudes from Pint quantities
     extracted_dict = {}
     for key, val in data_dict.items():
         if hasattr(val, 'magnitude'):
             # Pint quantity - extract magnitude
-            extracted_dict[key] = val.magnitude
+            magnitude = val.magnitude
+            # Convert numpy scalar to Python scalar
+            if hasattr(magnitude, 'item') and magnitude.ndim == 0:
+                magnitude = magnitude.item()
+            extracted_dict[key] = magnitude
         else:
-            extracted_dict[key] = val
+            # Convert numpy scalar to Python scalar if needed
+            if hasattr(val, 'item') and hasattr(val, 'ndim') and val.ndim == 0:
+                extracted_dict[key] = val.item()
+            else:
+                extracted_dict[key] = val
     
-    try:
-        # Try to get length - works for arrays
-        len(first_val)
+    # Check if any value is array-like (has length)
+    has_arrays = False
+    for val in extracted_dict.values():
+        try:
+            len(val)
+            has_arrays = True
+            break
+        except TypeError:
+            continue
+    
+    if has_arrays:
         return pd.DataFrame(extracted_dict)
-    except TypeError:
-        # Scalar values - need explicit index
+    else:
+        # All scalar values - need explicit index
         return pd.DataFrame(extracted_dict, index=[0])
 
 

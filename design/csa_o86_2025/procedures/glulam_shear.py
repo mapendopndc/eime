@@ -24,7 +24,7 @@ def glulam_shear_procedure(
     Parameters
     ----------
     KD : EngineeringFormula
-        Long duration factor calculation
+        Load duration factor calculation
     CV : EngineeringFormula
         Shear load coefficient calculation
     Fv : EngineeringFormula

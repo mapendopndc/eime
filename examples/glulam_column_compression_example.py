@@ -5,19 +5,15 @@ This example demonstrates the design of a glulam column
 using the TimberBeamDesign class to check compression capacity
 per CSA O86:25 Section 7.5.8.
 """
-
-from pint import UnitRegistry
-import pandas as pd
-
 from design.csa_o86_2025.calculators import (
     RectangularProfile,
     TimberMaterial,
     TimberSection,
     TimberDesignParameters,
     TimberLoads,
+    TimberLoadingParameters,
     TimberBeamDesign
 )
-from design.csa_o86_2025 import formulas as TimberDesign
 from load.nbcc2020 import nbcc_uls_combinations
 from eime.units import ureg
 
@@ -60,9 +56,13 @@ def main():
     end_conditions = "Pin - Pin"  # Both ends pinned
     
     # Nominal axial loads (unfactored)
-    dead_axial_kN = 25.0 * kN   # Dead load
-    live_axial_kN = 17.5 * kN   # Live load
-    snow_axial_kN = 23.0 * kN   # Snow load
+    # These loads are configured to trigger the K_D formula:
+    # - Dead load (50 kN) dominates over Live (15 kN) + Snow (20 kN)
+    # - Results in P_L/P_S ratio ≈ 1.43 > 1.0
+    # - Formula calculates K_D ≈ 0.92 instead of using table value (1.0)
+    dead_axial_kN = 50.0 * kN   # Dead load
+    live_axial_kN = 15.0 * kN   # Live load  
+    snow_axial_kN = 20.0 * kN   # Snow load
     
     # ==========================================
     # NBCC 2020 LOAD COMBINATIONS
@@ -116,7 +116,7 @@ def main():
     
     # Sum of G for load duration (not critical for compression-only)
     SumG = 0.0 * nd
-    
+
     # Create design parameters with biaxial compression support
     parameters = TimberDesignParameters(
         beam_ids=beam_ids,
@@ -130,32 +130,25 @@ def main():
         ureg=ureg
     )
     
+    # Create loading parameters for K_D calculation
+    # All loads are axial compression, so use same ratios for all force types
+    loading_params = TimberLoadingParameters(
+        P_L_M=load_combos.duration_long_percent,
+        P_S_M=load_combos.duration_short_percent,
+        P_L_V=load_combos.duration_long_percent,
+        P_S_V=load_combos.duration_short_percent,
+        P_L_P=load_combos.duration_long_percent,
+        P_S_P=load_combos.duration_short_percent,
+        load_combo_types=load_combos.load_combo_types,
+        ureg=ureg
+    )
+    
     # ==========================================
     # DEFINE LOADS
     # ==========================================
     
-    # Calculate load duration factor (K_D) using simplified method
-    # Per CSA O86:25 Table 5.3.2.2:
-    #   - Dead only: K_D = 0.65
-    #   - Includes live: K_D = 1.0
-    #   - Includes wind or seismic: K_D = 1.15
-    import numpy as np
-    
-    kd_values = []
-    for combo_type in load_combos.load_combo_types:
-        if combo_type == "dead_only":
-            kd_values.append(0.65)
-        elif combo_type == "includes_live":
-            kd_values.append(1.0)
-        elif combo_type == "includes_wind_or_seismic":
-            kd_values.append(1.15)
-        else:
-            kd_values.append(1.0)  # Default to standard duration
-    
-    KD = np.array(kd_values) * nd
-    
-    # Create loads object with KD factor
-    loads = TimberLoads(KD=KD)
+    # Create loads object (now only contains actual loads)
+    loads = TimberLoads()
     
     # Set compression loads from NBCC combinations
     loads.P = factored_loads
@@ -175,7 +168,8 @@ def main():
     design = TimberBeamDesign(
         section=section,
         loading=loads,
-        parameters=parameters
+        parameters=parameters,
+        loading_params=loading_params
     )
     
     # ==========================================

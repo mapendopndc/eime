@@ -7,52 +7,6 @@ from eime import create_formula, create_switch, Param, Check, STATUS, Engineerin
 
 
 @formula
-def long_duration_factor(P_L: float, P_S: float) -> EngineeringFormula:
-    """
-    Long duration load factor per CSA O86:24.
-    
-    Except as specified in Clause 5.3.2.3, when the specified long-term load, P_L, 
-    is greater than the specified standard-term load, P_S, a load-duration factor 
-    of 0.65 may be used, or K_D may be calculated using this formula.
-    
-    Parameters
-    ----------
-    P_L : float
-        Specified long-term load
-    P_S : float
-        Specified standard-term load based on Snow (S) and Live (L) loads acting 
-        alone or in combination = S, L, S + 0.5L, or 0.5S + L, determined using 
-        importance factors equal to 1.0
-        
-    Returns
-    -------
-    EngineeringFormula
-        Formula for long duration factor
-        
-    Notes
-    -----
-    LaTeX: $K_D = 1.0 - 0.50 \\log_{{10}}(P_L/P_S) \\ge 0.65$
-    
-    P_L and P_S must be non-zero.
-    
-    References
-    ----------
-    CSA O86:24 cl.5.3.2.2
-    """
-    return create_formula(
-        name="K_D",
-        params={
-            "P_L": Param("P_L", unit="dimensionless", desc="specified long-term load"),
-            "P_S": Param("P_S", unit="dimensionless", desc="specified standard-term load")
-        },
-        logic=lambda P_L, P_S: np.maximum(1.0 - 0.50 * np.log10(np.abs(P_L/P_S)), 0.65),
-        latex_template=lambda P_L, P_S: f"1.0 - 0.50 \\log_{{10}}({P_L}/{P_S}) \\ge 0.65",
-        source="CSA O86:24 cl.5.3.2.2",
-        desc="Long Duration Factor"
-    )
-
-
-@formula
 def modified_bending_strength(f_b: float, K_D: float, K_H: float, K_Sb: float, K_T: float) -> EngineeringFormula:
     """
     Modified strength in bending.

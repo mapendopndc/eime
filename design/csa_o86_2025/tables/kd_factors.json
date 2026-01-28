@@ -1,0 +1,18 @@
+{
+  "metadata": {
+    "description": "Load duration factors for CSA O86-2025",
+    "source": "CSA O86:24 cl.5.3.2",
+    "version": "2024"
+  },
+  "kd_by_load_type": {
+    "dead_only": 0.65,
+    "includes_live": 1.0,
+    "includes_wind_or_seismic": 1.15
+  },
+  "notes": {
+    "dead_only": "Permanent load duration (> 10 years)",
+    "includes_live": "Standard load duration (snow, occupancy live loads)",
+    "includes_wind_or_seismic": "Short duration load (wind, seismic)",
+    "formula_exception": "When PL > PS for mixed long/standard loads, use formula: K_D = max(1.0 - 0.50*log10(PL/PS), 0.65)"
+  }
+}

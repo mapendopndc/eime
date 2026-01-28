@@ -5,7 +5,6 @@ This module contains all engineering formulas for timber design per CSA O86-2025
 """
 
 from .glulam_bending import (
-    long_duration_factor,
     modified_bending_strength,
     bending_size_factor,
     slenderness_ratio,
@@ -51,9 +50,14 @@ from .applied_loads import (
     applied_compression,
 )
 
+from .load_duration import (
+    load_duration_factor,
+)
+
 __all__ = [
+    # Load Duration
+    "load_duration_factor",
     # Bending
-    "long_duration_factor",
     "modified_bending_strength",
     "bending_size_factor",
     "slenderness_ratio",

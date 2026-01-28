@@ -566,16 +566,14 @@ class EngineeringSwitch(EngineeringFunction):
         # Get current bound values
         bounds_at_index = [self._get_value_at_index(b, index) for b in self.solved_bounds]
         
-        # Determine which output is selected
+        # Determine which output is selected based on bounds
+        # Switch logic: outputs[0] if input <= bounds[0], outputs[1] if bounds[0] < input <= bounds[1], etc.
         selected_idx = 0
-        if input_val > bounds_at_index[-1]:
-            selected_idx = len(bounds_at_index)
-        else:
-            for i, bound in enumerate(bounds_at_index):
-                if i + 1 < len(bounds_at_index):
-                    if input_val > bound and input_val <= bounds_at_index[i + 1]:
-                        selected_idx = i + 1
-                        break
+        for i, bound in enumerate(bounds_at_index):
+            if input_val > bound:
+                selected_idx = i + 1
+            else:
+                break
         
         # Get bound strings (names or values)
         bound_strs = []
@@ -585,17 +583,19 @@ class EngineeringSwitch(EngineeringFunction):
             else:
                 bound_strs.append(str(bound))
         
-        # Get output strings
+        # Get output strings and track if they are functions (already have LHS)
         output_strs = []
+        output_is_function = []
         for output in self.outputs:
             if isinstance(output, EngineeringFunction):
                 # Use generate_function_latex to get just the equation without align* wrapper
-                # Wrap in aligned environment for proper nesting within the parent align*
+                # Don't wrap in aligned - let it participate in parent align* alignment
                 func_latex = output.generate_function_latex(index)
-                # Use aligned[t] for top-alignment to match baseline
-                output_strs.append(f"\\begin{{aligned}}[t]\n{func_latex}\n\\end{{aligned}}")
+                output_strs.append(func_latex)
+                output_is_function.append(True)
             else:
                 output_strs.append(str(self._get_value_at_index(output, index)))
+                output_is_function.append(False)
         
         # Build condition text
         param_symbol = list(self.params.values())[0].latex
@@ -607,10 +607,17 @@ class EngineeringSwitch(EngineeringFunction):
         else:
             condition = f"{bound_strs[selected_idx - 1]} < {param_symbol} \\leq {bound_strs[selected_idx]}"
         
-        equation = (
-            f"\\text{{Condition:}} & \\quad {condition} \\\\ "
-            f"{self.name} &= {output_strs[selected_idx]}"
-        )
+        # If output is a function, it already includes LHS (symbol &= ...), otherwise add it
+        if output_is_function[selected_idx]:
+            equation = (
+                f"\\text{{Condition:}} & \\quad {condition} \\\\ "
+                f"{output_strs[selected_idx]}"
+            )
+        else:
+            equation = (
+                f"\\text{{Condition:}} & \\quad {condition} \\\\ "
+                f"{self.name} &= {output_strs[selected_idx]}"
+            )
         
         return equation
     

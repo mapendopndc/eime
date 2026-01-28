@@ -27,7 +27,7 @@ def glulam_compression_procedure(
     Parameters
     ----------
     KD : EngineeringFormula
-        Long duration factor calculation
+        Load duration factor calculation
     Fc : EngineeringFormula
         Modified compression strength calculation
     KZcg : EngineeringFormula

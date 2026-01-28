@@ -14,7 +14,6 @@ from design.csa_o86_2025.formulas import (
     section_modulus,
     stiffness_modulus_of_elasticity,
     # Bending
-    long_duration_factor,
     modified_bending_strength,
     bending_size_factor,
     slenderness_ratio,
@@ -31,6 +30,7 @@ from design.csa_o86_2025.formulas import (
     slenderness_factor,
     compression_resistance,
 )
+from design.csa_o86_2025.formulas.load_duration import kd_formula
 
 ureg = UnitRegistry()
 nd = ureg.dimensionless
@@ -62,13 +62,13 @@ class TestBendingFormulas:
     
     def test_long_duration_factor(self):
         """Test long duration factor calculation."""
-        K_D = long_duration_factor(P_L=10.0*nd, P_S=20.0*nd)
+        K_D = kd_formula(P_L=10.0*nd, P_S=20.0*nd)
         expected = max(1.0 - 0.50 * np.log10(10.0/20.0), 0.65)
         assert_formula_result(K_D, expected, tolerance=1e-6)
     
     def test_long_duration_factor_minimum(self):
         """Test that K_D doesn't go below 0.65."""
-        K_D = long_duration_factor(P_L=50.0*nd, P_S=10.0*nd)
+        K_D = kd_formula(P_L=50.0*nd, P_S=10.0*nd)
         assert K_D.result >= 0.65, "K_D should not be less than 0.65"
     
     def test_modified_bending_strength(self):
@@ -215,7 +215,7 @@ class TestBatchCalculations:
         """Test K_D with array inputs."""
         P_L = np.array([10.0, 20.0, 30.0])
         P_S = np.array([20.0, 30.0, 40.0])
-        K_D = long_duration_factor(P_L=P_L, P_S=P_S)
+        K_D = kd_formula(P_L=P_L, P_S=P_S)
         results = K_D.result
         
         assert isinstance(results, np.ndarray)
