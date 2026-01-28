@@ -1,17 +1,11 @@
 """
 2D Finite Element Method solver for structural analysis.
+
+Note: PyNite shear preprocessing has been moved to the preprocessor package.
+Use: from preprocessor.pynite_shear import extract_shear_diagram
 """
 
-from .pynite_shear import (
-    extract_shear_diagram,
-    identify_shear_segments,
-    prepare_shear_segment_arrays,
-    compute_sum_g
-)
+# This module previously contained pynite_shear.py
+# It has been relocated to: preprocessor/pynite_shear.py
 
-__all__ = [
-    'extract_shear_diagram',
-    'identify_shear_segments',
-    'prepare_shear_segment_arrays',
-    'compute_sum_g'
-]
+__all__ = []

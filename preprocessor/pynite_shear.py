@@ -20,7 +20,8 @@ def extract_shear_diagram(
     model,
     member_name: str,
     load_combo: str,
-    num_points: int = 100
+    num_points: int = 100,
+    absolute: bool = True
 ) -> Tuple[np.ndarray, np.ndarray]:
     """
     Extract shear force diagram from a PyNite beam member.
@@ -35,24 +36,29 @@ def extract_shear_diagram(
         Name of the load combination
     num_points : int, optional
         Number of points to sample along the member (default: 100)
+    absolute : bool, optional
+        If True, return absolute values (for CSA O86 calculations).
+        If False, return signed values (for visualization). Default: True
         
     Returns
     -------
     positions : np.ndarray
         Array of positions along member [m]
     shear_values : np.ndarray
-        Array of shear force values [kN] (absolute values)
+        Array of shear force values [kN]
         
     Notes
     -----
     Per CSA O86 7.5.7.6 a), for maximum shear forces, positive and negative
-    values are both treated as positive (absolute values).
+    values are both treated as positive (absolute values). Set absolute=True
+    for design calculations, absolute=False for visualization.
     
     Examples
     --------
     >>> model = FEModel3D()
     >>> # ... setup and analyze model ...
-    >>> x, V = extract_shear_diagram(model, 'M1', 'ULS_1')
+    >>> x, V = extract_shear_diagram(model, 'M1', 'ULS_1')  # Absolute values
+    >>> x, V_signed = extract_shear_diagram(model, 'M1', 'ULS_1', absolute=False)  # Signed
     """
     if model is None:
         raise ValueError("PyNite model is required")
@@ -73,8 +79,8 @@ def extract_shear_diagram(
             # Extract shear force at position x for the given load combo
             # Note: Using 'Fy' for vertical shear in 2D beam
             V = member.shear('Fy', x, load_combo)
-            # Take absolute value per CSA O86 7.5.7.6 a)
-            shear_values[i] = abs(V)
+            # Take absolute value per CSA O86 7.5.7.6 a) if requested
+            shear_values[i] = abs(V) if absolute else V
         except Exception as e:
             # If extraction fails, use zero
             shear_values[i] = 0.0
@@ -138,35 +144,60 @@ def identify_shear_segments(
     dx = np.diff(positions)
     dV = np.diff(shear_values)
     
-    # Avoid division by zero
-    slopes = np.where(dx > tolerance, dV / dx, 0.0)
+    # Avoid division by zero using safe division
+    # np.where evaluates both branches, so we need to mask the division
+    with np.errstate(divide='ignore', invalid='ignore'):
+        slopes = np.divide(dV, dx, out=np.zeros_like(dV), where=dx > tolerance)
     
     # Detect slope changes (indicating load discontinuities or abrupt changes)
     if len(slopes) > 1:
         slope_changes = np.abs(np.diff(slopes))
-        # Normalize by maximum slope to make threshold relative
-        max_slope = np.max(np.abs(slopes)) if np.max(np.abs(slopes)) > 0 else 1.0
-        relative_changes = slope_changes / max_slope
+        # Normalize by maximum slope change to make threshold relative
+        max_slope_change = np.max(slope_changes) if np.max(slope_changes) > 0 else 1.0
+        relative_changes = slope_changes / max_slope_change
         
         # Find significant slope changes
-        # Using 10% as threshold - can be adjusted based on requirements
-        discontinuity_threshold = 0.1
+        # Using 20% as threshold - can be adjusted based on requirements
+        discontinuity_threshold = 0.2
         discontinuity_indices = np.where(relative_changes > discontinuity_threshold)[0]
         
-        # Create segments at discontinuities
-        for disc_idx in discontinuity_indices:
-            # disc_idx is in the slope array, so segment ends at disc_idx+1 in original array
-            end_idx = disc_idx + 1
+        # Group consecutive discontinuity indices (they represent the same physical discontinuity)
+        # and take the one with maximum slope change
+        if len(discontinuity_indices) > 0:
+            grouped_discontinuities = []
+            current_group = [discontinuity_indices[0]]
             
-            if end_idx > segment_start_idx:
-                segments.append({
-                    'start_idx': segment_start_idx,
-                    'end_idx': end_idx,
-                    'start_pos': positions[segment_start_idx],
-                    'end_pos': positions[end_idx],
-                    'length': positions[end_idx] - positions[segment_start_idx]
-                })
-                segment_start_idx = end_idx
+            for i in range(1, len(discontinuity_indices)):
+                if discontinuity_indices[i] - discontinuity_indices[i-1] <= 2:
+                    # Consecutive or very close, same discontinuity
+                    current_group.append(discontinuity_indices[i])
+                else:
+                    # New discontinuity
+                    # Find the index with maximum slope change in current group
+                    max_change_idx = current_group[np.argmax([slope_changes[idx] for idx in current_group])]
+                    grouped_discontinuities.append(max_change_idx)
+                    current_group = [discontinuity_indices[i]]
+            
+            # Don't forget the last group
+            max_change_idx = current_group[np.argmax([slope_changes[idx] for idx in current_group])]
+            grouped_discontinuities.append(max_change_idx)
+            
+            # Create segments at discontinuities
+            for disc_idx in grouped_discontinuities:
+                # disc_idx is in the slope_changes array (one shorter than slopes)
+                # The discontinuity occurs between slopes[disc_idx] and slopes[disc_idx+1]
+                # Which corresponds to position index disc_idx+1
+                end_idx = disc_idx + 1
+                
+                if end_idx > segment_start_idx:
+                    segments.append({
+                        'start_idx': segment_start_idx,
+                        'end_idx': end_idx,
+                        'start_pos': positions[segment_start_idx],
+                        'end_pos': positions[end_idx],
+                        'length': positions[end_idx] - positions[segment_start_idx]
+                    })
+                    segment_start_idx = end_idx
     
     # Add final segment
     if segment_start_idx < len(positions) - 1:

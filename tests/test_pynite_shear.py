@@ -7,7 +7,7 @@ per CSA O86 7.5.7.6.
 
 import pytest
 import numpy as np
-from utils.fem.pynite_shear import (
+from preprocessor.pynite_shear import (
     identify_shear_segments,
     prepare_shear_segment_arrays,
     compute_sum_g
