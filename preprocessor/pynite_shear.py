@@ -140,6 +140,19 @@ def identify_shear_segments(
     segments = []
     segment_start_idx = 0
     
+    # First, detect sign changes (zero-crossings) explicitly
+    # These are critical segment boundaries that must always be detected
+    sign_changes = []
+    for i in range(len(shear_values) - 1):
+        # Check for sign change (product is negative or one is zero)
+        if shear_values[i] * shear_values[i + 1] < 0:
+            sign_changes.append(i + 1)
+        # Also check if value is essentially zero (within tolerance)
+        elif abs(shear_values[i]) < tolerance and i > 0:
+            # Make sure it's a true zero-crossing, not just numerical noise
+            if i + 1 < len(shear_values) and abs(shear_values[i + 1]) > tolerance:
+                sign_changes.append(i)
+    
     # Calculate finite differences to detect discontinuities
     dx = np.diff(positions)
     dV = np.diff(shear_values)
@@ -152,19 +165,31 @@ def identify_shear_segments(
     # Detect slope changes (indicating load discontinuities or abrupt changes)
     if len(slopes) > 1:
         slope_changes = np.abs(np.diff(slopes))
-        # Normalize by maximum slope change to make threshold relative
+        
+        # Use BOTH absolute and relative thresholds to avoid false positives
+        # Absolute threshold: ignore slope changes smaller than 1% of max absolute slope
+        max_abs_slope = np.max(np.abs(slopes)) if len(slopes) > 0 else 1.0
+        absolute_threshold = 0.01 * max_abs_slope
+        
+        # Relative threshold: within "significant" slope changes, only flag the largest ones
         max_slope_change = np.max(slope_changes) if np.max(slope_changes) > 0 else 1.0
         relative_changes = slope_changes / max_slope_change
         
-        # Find significant slope changes
-        # Using 20% as threshold - can be adjusted based on requirements
+        # A discontinuity must satisfy BOTH conditions:
+        # 1. Absolute slope change > 1% of maximum slope (filters numerical noise)
+        # 2. Relative slope change > 20% of max change (filters minor variations)
         discontinuity_threshold = 0.2
-        discontinuity_indices = np.where(relative_changes > discontinuity_threshold)[0]
+        significant_indices = np.where(
+            (slope_changes > absolute_threshold) & 
+            (relative_changes > discontinuity_threshold)
+        )[0]
+        
+        discontinuity_indices = significant_indices
         
         # Group consecutive discontinuity indices (they represent the same physical discontinuity)
         # and take the one with maximum slope change
+        grouped_discontinuities = []
         if len(discontinuity_indices) > 0:
-            grouped_discontinuities = []
             current_group = [discontinuity_indices[0]]
             
             for i in range(1, len(discontinuity_indices)):
@@ -181,21 +206,95 @@ def identify_shear_segments(
             # Don't forget the last group
             max_change_idx = current_group[np.argmax([slope_changes[idx] for idx in current_group])]
             grouped_discontinuities.append(max_change_idx)
+        
+        # Convert slope discontinuities to position indices
+        # slope_changes[i] represents change between slopes[i] and slopes[i+1]
+        # This corresponds to a discontinuity at position index i+1
+        slope_disc_positions = [idx + 1 for idx in grouped_discontinuities]
+        
+        # Combine slope discontinuities with sign changes (both now in position index space)
+        all_discontinuities = sorted(set(slope_disc_positions + sign_changes))
+        
+        # Group discontinuities that are too close together (within 3 sample points)
+        # This handles cases like support reactions where shear jumps vertically
+        # and creates multiple detected discontinuities at the same physical location
+        if len(all_discontinuities) > 1:
+            grouped_disc = []
+            current_group = [all_discontinuities[0]]
             
-            # Create segments at discontinuities
-            for disc_idx in grouped_discontinuities:
-                # disc_idx is in the slope_changes array (one shorter than slopes)
-                # The discontinuity occurs between slopes[disc_idx] and slopes[disc_idx+1]
-                # Which corresponds to position index disc_idx+1
-                end_idx = disc_idx + 1
+            for i in range(1, len(all_discontinuities)):
+                # If this discontinuity is within 3 points of the previous one
+                if all_discontinuities[i] - current_group[-1] <= 3:
+                    current_group.append(all_discontinuities[i])
+                else:
+                    # Take the middle of the group as the representative discontinuity
+                    grouped_disc.append(current_group[len(current_group) // 2])
+                    current_group = [all_discontinuities[i]]
+            
+            # Don't forget the last group
+            grouped_disc.append(current_group[len(current_group) // 2])
+            
+            all_discontinuities = grouped_disc
+        
+        # Create segments at discontinuities
+        if len(all_discontinuities) > 0:
+            for end_idx in all_discontinuities:
+                
+                # For better accuracy with linear shear diagrams, interpolate to find
+                # the exact minimum point (zero-crossing for symmetric loads)
+                interpolated_pos = None
+                if end_idx > 0 and end_idx < len(shear_values) - 1:
+                    # Check if this is a V-shaped discontinuity (shear crossing zero)
+                    # Use absolute values to check for near-zero values
+                    abs_shear = np.abs(shear_values)
+                    if abs_shear[end_idx] < 0.1 * np.max(abs_shear):
+                        # Search window around the discontinuity for the minimum
+                        search_start = max(0, end_idx - 3)
+                        search_end = min(len(shear_values) - 1, end_idx + 3)
+                        
+                        # Find the absolute minimum in the search window
+                        search_values = abs_shear[search_start:search_end + 1]
+                        min_local_idx = np.argmin(search_values)
+                        min_idx = search_start + min_local_idx
+                        
+                        # Now interpolate around the minimum to find the exact zero point
+                        # Check if we can interpolate between this point and neighbors
+                        if min_idx > 0 and min_idx < len(shear_values) - 1:
+                            v_before = abs_shear[min_idx - 1]
+                            v_min = abs_shear[min_idx]
+                            v_after = abs_shear[min_idx + 1]
+                            
+                            # Fit a parabola through these 3 points to find exact minimum
+                            # Or use the point where shear is smallest
+                            if v_min < min(v_before, v_after):
+                                # Quadratic interpolation for more accuracy
+                                # Using the vertex formula for a parabola through 3 points
+                                dx = positions[min_idx] - positions[min_idx - 1]
+                                if abs(dx) > tolerance and abs(v_before - v_after) > tolerance:
+                                    # Offset from min_idx position to the true minimum
+                                    offset = dx * (v_before - v_after) / (2 * (v_before - 2*v_min + v_after))
+                                    interpolated_pos = positions[min_idx] + offset
+                                else:
+                                    interpolated_pos = positions[min_idx]
+                                end_idx = min_idx
+                            else:
+                                # Not a true local minimum, just use the smallest value
+                                end_idx = min_idx
+                                interpolated_pos = positions[min_idx]
+                        else:
+                            end_idx = min_idx
                 
                 if end_idx > segment_start_idx:
+                    # Use interpolated position if available, otherwise use sampled position
+                    end_position = interpolated_pos if interpolated_pos is not None else positions[end_idx]
+                    
                     segments.append({
                         'start_idx': segment_start_idx,
                         'end_idx': end_idx,
                         'start_pos': positions[segment_start_idx],
-                        'end_pos': positions[end_idx],
-                        'length': positions[end_idx] - positions[segment_start_idx]
+                        'end_pos': end_position,
+                        'length': end_position - positions[segment_start_idx],
+                        'interpolated_end': interpolated_pos is not None
                     })
                     segment_start_idx = end_idx
     
@@ -218,6 +317,79 @@ def identify_shear_segments(
             'end_pos': positions[-1],
             'length': positions[-1] - positions[0]
         })
+    
+    # Merge tiny segments (typically at support discontinuities)
+    # A segment is considered "tiny" if it's less than 1% of the total beam length
+    if len(segments) > 1:
+        total_length = positions[-1] - positions[0]
+        min_segment_length = 0.01 * total_length  # 1% of beam length
+        
+        merged_segments = []
+        i = 0
+        while i < len(segments):
+            current_seg = segments[i]
+            
+            # Check if this segment is tiny
+            if current_seg['length'] < min_segment_length:
+                # Try to merge with adjacent segment
+                if i > 0 and i < len(segments) - 1:
+                    # Tiny segment in the middle - merge with larger neighbor
+                    prev_seg = merged_segments[-1] if merged_segments else None
+                    next_seg = segments[i + 1]
+                    
+                    # Merge with the smaller of the two neighbors to balance
+                    if prev_seg and prev_seg['length'] <= next_seg['length']:
+                        # Merge with previous segment
+                        merged_segments[-1] = {
+                            'start_idx': prev_seg['start_idx'],
+                            'end_idx': current_seg['end_idx'],
+                            'start_pos': prev_seg['start_pos'],
+                            'end_pos': current_seg['end_pos'],
+                            'length': current_seg['end_pos'] - prev_seg['start_pos'],
+                            'interpolated_end': current_seg.get('interpolated_end', False)
+                        }
+                    else:
+                        # Merge with next segment
+                        segments[i + 1] = {
+                            'start_idx': current_seg['start_idx'],
+                            'end_idx': next_seg['end_idx'],
+                            'start_pos': current_seg['start_pos'],
+                            'end_pos': next_seg['end_pos'],
+                            'length': next_seg['end_pos'] - current_seg['start_pos'],
+                            'interpolated_end': next_seg.get('interpolated_end', False)
+                        }
+                        # Skip adding current segment
+                        i += 1
+                        continue
+                elif i == 0 and len(segments) > 1:
+                    # First segment is tiny - merge with next
+                    segments[i + 1] = {
+                        'start_idx': current_seg['start_idx'],
+                        'end_idx': segments[i + 1]['end_idx'],
+                        'start_pos': current_seg['start_pos'],
+                        'end_pos': segments[i + 1]['end_pos'],
+                        'length': segments[i + 1]['end_pos'] - current_seg['start_pos'],
+                        'interpolated_end': segments[i + 1].get('interpolated_end', False)
+                    }
+                    i += 1
+                    continue
+                elif i == len(segments) - 1 and merged_segments:
+                    # Last segment is tiny - merge with previous
+                    merged_segments[-1] = {
+                        'start_idx': merged_segments[-1]['start_idx'],
+                        'end_idx': current_seg['end_idx'],
+                        'start_pos': merged_segments[-1]['start_pos'],
+                        'end_pos': current_seg['end_pos'],
+                        'length': current_seg['end_pos'] - merged_segments[-1]['start_pos'],
+                        'interpolated_end': current_seg.get('interpolated_end', False)
+                    }
+                    i += 1
+                    continue
+            
+            merged_segments.append(current_seg)
+            i += 1
+        
+        segments = merged_segments if merged_segments else segments
     
     return segments
 
@@ -285,13 +457,17 @@ def prepare_shear_segment_arrays(
     ...     segment_data['V_B'], segment_data['V_C']
     ... )]
     """
-    # Extract shear diagram
-    positions, shear_values = extract_shear_diagram(
-        model, member_name, load_combo, num_points
+    # Extract shear diagram with SIGNED values first to properly identify segments
+    # (zero-crossings and discontinuities are easier to detect with signs)
+    positions, shear_signed = extract_shear_diagram(
+        model, member_name, load_combo, num_points, absolute=False
     )
     
-    # Identify segments
-    segments = identify_shear_segments(positions, shear_values)
+    # Also get absolute values for later use
+    shear_abs = np.abs(shear_signed)
+    
+    # Identify segments using signed values (preserves zero-crossings)
+    segments = identify_shear_segments(positions, shear_signed)
     
     # Prepare arrays for each segment
     l_a_list = []
@@ -299,19 +475,44 @@ def prepare_shear_segment_arrays(
     V_B_list = []
     V_C_list = []
     
+    # Define tolerance for near-zero shear values (1% of max shear)
+    max_shear = np.max(shear_abs) if len(shear_abs) > 0 else 1.0
+    zero_tolerance = 0.01 * max_shear  # 1% of maximum shear
+    
+    # Get PyNite member for interpolating shear values at exact positions
+    member = model.members[member_name]
+    
     for segment in segments:
         # Segment length
         l_a = segment['length']
         
-        # Shear at start (V_A)
-        V_A = shear_values[segment['start_idx']]
+        # Shear at start (V_A) - use absolute values per CSA O86
+        V_A = shear_abs[segment['start_idx']]
         
         # Shear at end (V_B)
-        V_B = shear_values[segment['end_idx']]
+        # If the segment end was interpolated (e.g., at a zero-crossing),
+        # query PyNite directly at that exact position for precise value
+        if segment.get('interpolated_end', False):
+            try:
+                # Get shear at exact interpolated position
+                V_B = abs(member.shear('Fy', segment['end_pos'], load_combo))
+            except:
+                # Fallback to sampled value
+                V_B = shear_abs[segment['end_idx']]
+        else:
+            V_B = shear_abs[segment['end_idx']]
         
-        # Shear at center (V_C)
+        # Shear at center (V_C) - use absolute values per CSA O86
         center_idx = (segment['start_idx'] + segment['end_idx']) // 2
-        V_C = shear_values[center_idx]
+        V_C = shear_abs[center_idx]
+        
+        # Snap near-zero values to exactly zero (handles numerical precision at zero-crossings)
+        if abs(V_A) < zero_tolerance:
+            V_A = 0.0
+        if abs(V_B) < zero_tolerance:
+            V_B = 0.0
+        if abs(V_C) < zero_tolerance:
+            V_C = 0.0
         
         # Apply units if ureg provided
         if ureg is not None:
@@ -341,8 +542,8 @@ def prepare_shear_segment_arrays(
     # Shear at right support = right reaction (negative)
     # Total load = left reaction + right reaction
     try:
-        V_left = abs(shear_values[0])   # Shear at start
-        V_right = abs(shear_values[-1])  # Shear at end
+        V_left = shear_abs[0]   # Shear at start (already absolute)
+        V_right = shear_abs[-1]  # Shear at end (already absolute)
         
         # Total load is sum of reactions
         W_f = V_left + V_right
@@ -352,7 +553,7 @@ def prepare_shear_segment_arrays(
             W_f = W_f.to(ureg.N)
     except Exception:
         # Fallback: use max shear * 2 (for symmetric loading)
-        W_f = max(shear_values) * 2
+        W_f = max(shear_abs) * 2
         if ureg is not None:
             W_f = W_f * ureg.kN
             W_f = W_f.to(ureg.N)

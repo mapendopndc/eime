@@ -39,7 +39,8 @@ def extract_member_demands(
     x_coords : array-like
         x-coordinates along member where demands are needed
     load_combo : str, optional
-        Load combination name. If None, uses default.
+        Load combination name. If None, uses 'Combo 1' default.
+        For individual load cases, the load case name should be passed.
     
     Returns
     -------
@@ -63,10 +64,27 @@ def extract_member_demands(
     
     for i, x in enumerate(x_coords):
         try:
+            # PyNite can accept both load combos and load cases
+            # If load_combo is a valid load case or combo, it will be found
             M[i] = abs(member.moment('Mz', x, load_combo))
             V[i] = abs(member.shear('Fy', x, load_combo))
-            P[i] = abs(member.axial('Fx', x, load_combo))
-        except:
+            # Axial force method has different signature than moment/shear
+            P[i] = abs(member.axial(x, load_combo))
+        except (KeyError, ValueError) as e:
+            # If the combo/case doesn't exist, try without it (default combo)
+            print(f"Warning: Load combo/case '{load_combo}' not found, trying default")
+            try:
+                M[i] = abs(member.moment('Mz', x))
+                V[i] = abs(member.shear('Fy', x))
+                P[i] = abs(member.axial(x))
+            except Exception as e2:
+                print(f"Error extracting demands at x={x}: {e2}")
+                M[i] = 0.0
+                V[i] = 0.0
+                P[i] = 0.0
+        except Exception as e:
+            print(f"Error extracting demands at x={x} for combo '{load_combo}': {e}")
+            print(f"  Member: {member.name}, Load combo: {load_combo}")
             M[i] = 0.0
             V[i] = 0.0
             P[i] = 0.0
@@ -233,6 +251,81 @@ def calculate_total_factored_load(
     return W_f
 
 
+def calculate_zero_moment_segments(
+    model,
+    member_name: str,
+    x_stations: np.ndarray,
+    load_combo: str,
+    num_points: int = 401
+) -> np.ndarray:
+    """
+    Calculate segment length between zero moment points for K_Zbg at each station.
+    
+    The K_Zbg size factor uses L as the distance between inflection points
+    (points of zero moment). This function finds those points and returns
+    the segment length containing each station.
+    
+    Parameters
+    ----------
+    model : PyNite.FEModel3D
+        Analyzed PyNite model
+    member_name : str
+        Name of member
+    x_stations : array-like
+        Station coordinates [m]
+    load_combo : str
+        Load combination
+    num_points : int
+        Number of points to sample for finding zero crossings
+    
+    Returns
+    -------
+    np.ndarray
+        Segment length (distance between zero moment points) at each station [m]
+    """
+    member = model.members[member_name]
+    L_member = member.L()
+    
+    # Sample moment diagram at high resolution
+    x_sample = np.linspace(0, L_member, num_points)
+    M_sample = np.array([member.moment('Mz', x, load_combo) for x in x_sample])
+    
+    # Find zero crossings (inflection points)
+    # Include beam ends as boundaries
+    zero_points = [0.0]
+    
+    for i in range(len(M_sample) - 1):
+        # Check for sign change or zero value
+        if M_sample[i] * M_sample[i+1] < 0:
+            # Linear interpolation to find exact zero crossing
+            x_zero = x_sample[i] - M_sample[i] * (x_sample[i+1] - x_sample[i]) / (M_sample[i+1] - M_sample[i])
+            zero_points.append(x_zero)
+        elif abs(M_sample[i]) < 1e-6:  # Numerical zero
+            zero_points.append(x_sample[i])
+    
+    zero_points.append(L_member)
+    zero_points = sorted(set(zero_points))  # Remove duplicates and sort
+    
+    # For each station, find which segment it's in
+    L_zbg = np.zeros(len(x_stations))
+    
+    for i, x_station in enumerate(x_stations):
+        # Find the zero moment points surrounding this station
+        left_zero = 0.0
+        right_zero = L_member
+        
+        for j in range(len(zero_points) - 1):
+            if zero_points[j] <= x_station <= zero_points[j+1]:
+                left_zero = zero_points[j]
+                right_zero = zero_points[j+1]
+                break
+        
+        # Segment length is distance between these points
+        L_zbg[i] = right_zero - left_zero
+    
+    return L_zbg
+
+
 def calculate_shear_segment_parameters(
     model,
     member_name: str,
@@ -304,7 +397,7 @@ def calculate_shear_segment_parameters(
             member_name=member_name,
             load_combo=load_combo,
             beam_length=beam_length if ureg is None else beam_length * ureg.m,
-            num_points=100,
+            num_points=801,  # 801 points = 0.01m (10mm) spacing for precise segment detection
             ureg=ureg
         )
         
@@ -341,7 +434,7 @@ def calculate_shear_segment_parameters(
         l_b_array = np.zeros(len(x_stations))
         
         # Extract shear diagram for segment identification
-        positions, _ = extract_shear_diagram(model, member_name, load_combo, num_points=100)
+        positions, _ = extract_shear_diagram(model, member_name, load_combo, num_points=801)
         
         # Map each station to its segment
         for i, x_station in enumerate(x_stations):
@@ -467,5 +560,14 @@ def map_pynite_to_stations(
     
     # Add shear parameters to results
     results.update(shear_params)
+    
+    # Calculate zero-moment segment lengths for K_Zbg
+    L_zbg = calculate_zero_moment_segments(
+        model=model,
+        member_name=member_name,
+        x_stations=x_stations,
+        load_combo=load_combo
+    )
+    results['L_zbg'] = L_zbg
     
     return results

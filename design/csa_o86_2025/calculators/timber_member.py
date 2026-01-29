@@ -48,7 +48,7 @@ class TimberSection:
 class TimberDesignParameters:
     """Design parameters: beam_ids, beam_length, end_conditions, service_conditions, lu, Wf, SumG."""
     def __init__(self, beam_ids, beam_length, end_conditions, service_conditions, 
-                 lu=None, Wf=None, SumG=None, ureg=None, lu_strong=None, lu_weak=None):
+                 lu=None, Wf=None, SumG=None, ureg=None, lu_strong=None, lu_weak=None, L_zbg=None):
         self.K_e = TimberTables.EffectiveLengthFactorTable[end_conditions] * ureg.dimensionless
         
         # Service Factors (dimensionless from tables)
@@ -71,6 +71,10 @@ class TimberDesignParameters:
             self.lu_weak = lu
         else:
             raise ValueError("Must provide either 'lu' or both 'lu_strong' and 'lu_weak'")
+        
+        # L_zbg: segment length between zero moment points (for K_Zbg size factor)
+        # Defaults to beam_length if not provided
+        self.L_zbg = L_zbg if L_zbg is not None else beam_length
         
         self.Wf = Wf if Wf is not None else 1.0 * ureg.dimensionless
         self.SumG = SumG if SumG is not None else 0.0 * ureg.dimensionless
@@ -143,7 +147,7 @@ class TimberBeamDesign:
         
         calcs["KD"] = TimberDesign.load_duration_factor(ratio=ratio_vector, P_L=loading_params.P_L_M, P_S=loading_params.P_S_M, kd_table=kd_table_vector)
         calcs["Fb"] = TimberDesign.modified_bending_strength(mat.f_b, calcs["KD"].result, params.K_H, params.K_Sb, params.K_T)
-        calcs["KZbg"] = TimberDesign.bending_size_factor(dim.b, dim.d, params.L)
+        calcs["KZbg"] = TimberDesign.bending_size_factor(dim.b, dim.d, params.L_zbg)
         calcs["S"] = TimberDesign.section_modulus(dim.b, dim.d)
         calcs["lambda1"] = TimberDesign.slenderness_ratio(params.lu, dim.d, dim.b)
         calcs["lambda_e"] = TimberDesign.slenderness_ratio_limit(mat.E, params.K_SE, params.K_T, calcs["Fb"])

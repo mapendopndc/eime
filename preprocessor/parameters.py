@@ -151,6 +151,9 @@ class AnalysisMapper:
         l_a = self._extract_demand('l_a', x_stations, default_value=0.0)
         l_b = self._extract_demand('l_b', x_stations, default_value=0.0)
         
+        # Bending size factor segment length (distance between zero moment points)
+        L_zbg = self._extract_demand('L_zbg', x_stations, default_value=0.0)
+        
         return {
             'M_f': M_f,
             'V_f': V_f,
@@ -165,6 +168,7 @@ class AnalysisMapper:
             'Sum_G': Sum_G,
             'l_a': l_a,
             'l_b': l_b,
+            'L_zbg': L_zbg,
         }
     
     def _extract_demand(self, key: str, x_stations: np.ndarray, default_value: float = 0.0) -> np.ndarray:
@@ -200,13 +204,29 @@ class AnalysisMapper:
         load_cases: Dict
     ) -> np.ndarray:
         """Extract demand for specific load case."""
+        # First check if demand is already flattened (e.g., M_D, V_L, etc.)
+        flattened_key = f'{demand_type}_{load_case}'
+        if flattened_key in self.demands:
+            return self._extract_demand(flattened_key, x_stations, default_value=0.0)
+        
+        # Otherwise extract from load_cases structure
         if load_case not in load_cases:
             return np.zeros(len(x_stations))
         
         case_data = load_cases[load_case]
         demand_key = f'{demand_type}'
         
-        return self._extract_demand(demand_key, x_stations, default_value=0.0) if demand_key in case_data else np.zeros(len(x_stations))
+        if demand_key not in case_data:
+            return np.zeros(len(x_stations))
+        
+        # Extract directly from case_data
+        demand = case_data[demand_key]
+        if isinstance(demand, (np.ndarray, list)):
+            demand_array = np.array(demand)
+            if len(demand_array) == len(x_stations):
+                return demand_array
+        
+        return np.zeros(len(x_stations))
 
 
 class LoadDurationMapper:
@@ -214,7 +234,8 @@ class LoadDurationMapper:
     Maps load duration parameters to mesh stations.
     
     Determines which load combination governs at each station and calculates
-    the corresponding load duration ratios (P_L/P_S).
+    the corresponding load duration ratios (P_L/P_S). Automatically detects
+    which load cases are active based on the actual load values.
     
     Parameters
     ----------
@@ -222,17 +243,21 @@ class LoadDurationMapper:
         Mesh defining design stations
     analysis_params : dict
         Analysis parameters from AnalysisMapper
+    active_load_cases : list of str, optional
+        List of load cases that are active in the current combination.
+        e.g., ['D', 'L'] or ['D', 'S']. If None, auto-detects from data.
     
     Examples
     --------
-    >>> mapper = LoadDurationMapper(mesh, analysis_params)
+    >>> mapper = LoadDurationMapper(mesh, analysis_params, active_load_cases=['D', 'L'])
     >>> params = mapper.map()
     >>> params['P_L_M']  # Long-term moment ratio at each station
     """
     
-    def __init__(self, mesh: BeamMesh, analysis_params: Dict[str, np.ndarray]):
+    def __init__(self, mesh: BeamMesh, analysis_params: Dict[str, np.ndarray], active_load_cases: Optional[List[str]] = None):
         self.mesh = mesh
         self.analysis_params = analysis_params
+        self.active_load_cases = active_load_cases
     
     def map(self) -> Dict[str, np.ndarray]:
         """
@@ -242,24 +267,27 @@ class LoadDurationMapper:
         -------
         dict
             Dictionary with arrays aligned to mesh stations:
-            - 'P_L_M': Long-term moment duration ratio
-            - 'P_S_M': Short-term moment duration ratio
-            - 'P_L_V': Long-term shear duration ratio
-            - 'P_S_V': Short-term shear duration ratio
-            - 'P_L_P': Long-term axial duration ratio
-            - 'P_S_P': Short-term axial duration ratio
+            - 'P_L_M': Long-term (Dead) moment load proportion
+            - 'P_S_M': Standard-term (Live or Snow) moment load proportion
+            - 'P_L_V': Long-term (Dead) shear load proportion
+            - 'P_S_V': Standard-term (Live or Snow) shear load proportion
+            - 'P_L_P': Long-term (Dead) axial load proportion
+            - 'P_S_P': Standard-term (Live or Snow) axial load proportion
+            - 'governing_Ps_M': Governing P_S combination for moment (str array)
+            - 'governing_Ps_V': Governing P_S combination for shear (str array)
+            - 'governing_Ps_P': Governing P_S combination for axial (str array)
         """
         n = self.mesh.num_stations
         
         # Calculate duration ratios based on load case contributions
         P_L_M = self._calculate_duration_ratio('M', 'L')
-        P_S_M = self._calculate_duration_ratio('M', 'S')
+        P_S_M, governing_Ps_M = self._calculate_duration_ratio_with_governing('M', 'S')
         
         P_L_V = self._calculate_duration_ratio('V', 'L')
-        P_S_V = self._calculate_duration_ratio('V', 'S')
+        P_S_V, governing_Ps_V = self._calculate_duration_ratio_with_governing('V', 'S')
         
         P_L_P = self._calculate_duration_ratio('P', 'L')
-        P_S_P = self._calculate_duration_ratio('P', 'S')
+        P_S_P, governing_Ps_P = self._calculate_duration_ratio_with_governing('P', 'S')
         
         return {
             'P_L_M': P_L_M,
@@ -268,34 +296,187 @@ class LoadDurationMapper:
             'P_S_V': P_S_V,
             'P_L_P': P_L_P,
             'P_S_P': P_S_P,
+            'governing_Ps_M': governing_Ps_M,
+            'governing_Ps_V': governing_Ps_V,
+            'governing_Ps_P': governing_Ps_P,
         }
     
     def _calculate_duration_ratio(self, demand_type: str, duration_type: str) -> np.ndarray:
-        """Calculate duration ratio for specific demand and duration type."""
+        """
+        Calculate duration ratio for specific demand and duration type.
+        
+        Per CSA O86:24 cl.5.3.2.2:
+        - P_L (long-term): Dead load proportion = D / (D + L + S)
+        - P_S (standard-term): Minimum of possible standard-term combinations
+          to get most conservative (lowest) K_D when dead dominates.
+          P_S = min(L, S, S+0.5L, 0.5S+L) / (D + L + S)
+        
+        Automatically detects which loads are active by checking for non-zero values.
+        
+        Note: Proportions are based on UNFACTORED loads and should sum to ≤ 1.0
+        """
         # Extract demand arrays
         D_key = f'{demand_type}_D'
         L_key = f'{demand_type}_L'
         S_key = f'{demand_type}_S'
-        total_key = f'{demand_type}_f'
         
-        D = np.abs(self.analysis_params.get(D_key, 0.0))
-        L = np.abs(self.analysis_params.get(L_key, 0.0))
-        S = np.abs(self.analysis_params.get(S_key, 0.0))
-        total = np.abs(self.analysis_params.get(total_key, 1.0))
+        # Get zero array with correct shape for missing demands
+        n = self.mesh.num_stations
+        zeros = np.zeros(n)
+        
+        D = np.abs(self.analysis_params.get(D_key, zeros))
+        L = np.abs(self.analysis_params.get(L_key, zeros))
+        S = np.abs(self.analysis_params.get(S_key, zeros))
+        
+        # Detect which loads are active
+        # If active_load_cases was explicitly provided, use that
+        # Otherwise, auto-detect from non-zero values
+        if self.active_load_cases is not None:
+            has_dead = 'D' in self.active_load_cases
+            has_live = 'L' in self.active_load_cases
+            has_snow = 'S' in self.active_load_cases
+        else:
+            # Auto-detect using a small tolerance to account for numerical precision
+            tolerance = 1e-10
+            has_dead = np.any(D > tolerance)
+            has_live = np.any(L > tolerance)
+            has_snow = np.any(S > tolerance)
+        
+        # Zero out inactive loads
+        if not has_dead:
+            D = zeros
+        if not has_live:
+            L = zeros
+        if not has_snow:
+            S = zeros
+        
+        # Total UNFACTORED load (not factored total)
+        total_unfactored = D + L + S
         
         # Avoid division by zero
-        total = np.where(total == 0, 1.0, total)
+        total_unfactored = np.where(total_unfactored == 0, 1.0, total_unfactored)
         
         if duration_type == 'L':
-            # Long-term ratio: (D + L) / total
-            ratio = (D + L) / total
+            # P_L: Long-term (Dead) load proportion only
+            ratio = D / total_unfactored
         elif duration_type == 'S':
-            # Short-term ratio: S / total
-            ratio = S / total
+            # P_S: Standard-term load proportion
+            # Use minimum of standard-term combinations for most conservative K_D
+            # Possible combinations: L, S, S+0.5L, 0.5S+L
+            combo1 = L
+            combo2 = S
+            combo3 = S + 0.5 * L
+            combo4 = 0.5 * S + L
+            
+            # Find minimum standard-term load
+            min_standard = np.minimum(
+                np.minimum(combo1, combo2),
+                np.minimum(combo3, combo4)
+            )
+            
+            ratio = min_standard / total_unfactored
         else:
-            ratio = np.zeros_like(total)
+            ratio = np.zeros_like(total_unfactored)
         
         return ratio
+    
+    def _calculate_duration_ratio_with_governing(self, demand_type: str, duration_type: str):
+        """
+        Calculate P_S duration ratio and track which combination is governing.
+        
+        Automatically detects which loads are active by checking for non-zero values.
+        
+        Returns
+        -------
+        tuple
+            (ratio_array, governing_combo_array) where governing_combo_array contains
+            strings indicating which combination governed: 'L', 'S', 'S+0.5L', or '0.5S+L'
+        """
+        # Extract demand arrays
+        D_key = f'{demand_type}_D'
+        L_key = f'{demand_type}_L'
+        S_key = f'{demand_type}_S'
+        
+        # Get zero array with correct shape for missing demands
+        n = self.mesh.num_stations
+        zeros = np.zeros(n)
+        
+        D = np.abs(self.analysis_params.get(D_key, zeros))
+        L = np.abs(self.analysis_params.get(L_key, zeros))
+        S = np.abs(self.analysis_params.get(S_key, zeros))
+        
+        # Detect which loads are active
+        # If active_load_cases was explicitly provided, use that
+        # Otherwise, auto-detect from non-zero values
+        if self.active_load_cases is not None:
+            has_dead = 'D' in self.active_load_cases
+            has_live = 'L' in self.active_load_cases
+            has_snow = 'S' in self.active_load_cases
+        else:
+            # Auto-detect using a small tolerance to account for numerical precision
+            tolerance = 1e-10
+            has_dead = np.any(D > tolerance)
+            has_live = np.any(L > tolerance)
+            has_snow = np.any(S > tolerance)
+        
+        # Zero out inactive loads
+        if not has_dead:
+            D = zeros
+        if not has_live:
+            L = zeros
+        if not has_snow:
+            S = zeros
+        
+        # Total UNFACTORED load (not factored total)
+        total_unfactored = D + L + S
+        
+        # Avoid division by zero
+        total_unfactored = np.where(total_unfactored == 0, 1.0, total_unfactored)
+        
+        if duration_type == 'S':
+            # P_S: Standard-term load proportion
+            # Only consider combinations based on which loads are present
+            
+            if has_live and has_snow:
+                # Both L and S present: consider all 4 combinations
+                combo1 = L
+                combo2 = S
+                combo3 = S + 0.5 * L
+                combo4 = 0.5 * S + L
+                
+                # Stack all combinations for comparison
+                combos = np.stack([combo1, combo2, combo3, combo4], axis=0)
+                combo_names = ['L', 'S', 'S+0.5L', '0.5S+L']
+                
+            elif has_live and not has_snow:
+                # Only L present: use L only
+                combos = np.stack([L], axis=0)
+                combo_names = ['L']
+                
+            elif has_snow and not has_live:
+                # Only S present: use S only
+                combos = np.stack([S], axis=0)
+                combo_names = ['S']
+                
+            else:
+                # Neither L nor S present: use zeros
+                combos = np.stack([zeros], axis=0)
+                combo_names = ['None']
+            
+            # Find which combination is minimum at each station
+            min_indices = np.argmin(combos, axis=0)
+            min_standard = np.min(combos, axis=0)
+            
+            # Map indices to combination names
+            governing_combo = np.array([combo_names[idx] for idx in min_indices])
+            
+            ratio = min_standard / total_unfactored
+            return ratio, governing_combo
+        else:
+            # For other duration types, no governing tracking needed
+            ratio = self._calculate_duration_ratio(demand_type, duration_type)
+            governing_combo = np.array(['N/A'] * n)
+            return ratio, governing_combo
 
 
 class ParameterAssembler:
