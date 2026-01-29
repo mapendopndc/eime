@@ -20,7 +20,7 @@ from Pynite.FEModel3D import FEModel3D
 warnings.filterwarnings('ignore', 'invalid value encountered in divide', RuntimeWarning)
 
 from preprocessor import Beam, BeamMesh, GeometryMapper, AnalysisMapper, LoadDurationMapper, ParameterAssembler
-from preprocessor.analysis import map_pynite_to_stations
+from preprocessor.pynite_csa_mapper import map_pynite_to_stations
 from design.csa_o86_2025.calculators.timber_member import (
     RectangularProfile, TimberMaterial, TimberSection,
     TimberDesignParameters, TimberLoads, TimberLoadingParameters, TimberBeamDesign

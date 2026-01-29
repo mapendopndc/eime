@@ -78,14 +78,16 @@ class EngineeringProcedure:
         procedure.add_computation(factored_resistance)
     """
     
-    def __init__(self, name: str) -> None:
+    def __init__(self, name: str, sig_figs: int = 3) -> None:
         """
         Initialize a design procedure.
         
         Args:
             name: Name of the procedure
+            sig_figs: Number of significant figures for LaTeX output (default 3)
         """
         self.name = name
+        self.sig_figs = sig_figs
         self.procedure: List[Union[EngineeringFunction, DisplayText]] = []
         self.checks: Dict[int, EngineeringCheck] = {}
         
@@ -181,7 +183,7 @@ class EngineeringProcedure:
                 if hasattr(display_obj, 'desc') and display_obj.desc:
                     latex_parts.append(f"\n**{display_obj.desc}**\n")
                 # Generate LaTeX for formula - this already includes align* wrapper and checks
-                latex_str = display_obj.generate_latex(index)
+                latex_str = display_obj.generate_latex(index, precision=self.sig_figs)
                 # Wrap in $$ delimiters for proper markdown rendering
                 latex_parts.append(f"$$\n{latex_str}\n$$\n")
         

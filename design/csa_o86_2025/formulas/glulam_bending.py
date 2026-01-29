@@ -140,6 +140,7 @@ def slenderness_ratio(L_u: float, d: float, b: float) -> EngineeringFormula:
             "b": Param("b", unit="mm", desc="width")
         },
         logic=lambda L_u, d, b: np.sqrt(L_u * d / b**2),
+        result_unit='dimensionless',
         latex_template=lambda L_u, d, b: f"\\sqrt{{\\frac{{{L_u} \\cdot {d}}}{{{b}^2}}}}",
         source="CSA O86:24 7.5.6.5.2",
         desc="Slenderness Ratio"
@@ -186,6 +187,7 @@ def slenderness_ratio_limit(E: float, K_SE: float, K_T: float, F_b: float) -> En
             "F_b": Param("F_b", unit="MPa", desc="modified bending strength")
         },
         logic=lambda E, K_SE, K_T, F_b: np.sqrt(0.97 * E * K_SE * K_T / F_b),
+        result_unit='dimensionless',
         latex_template=lambda E, K_SE, K_T, F_b: f"\\sqrt{{\\frac{{0.97 \\cdot {E} \\cdot {K_SE} \\cdot {K_T}}}{{{F_b}}}}}",
         source="CSA O86:24 7.5.6.5.2 b)",
         desc="Slenderness Ratio Limit"

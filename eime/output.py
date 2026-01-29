@@ -65,22 +65,115 @@ class LaTeXFormatter:
     """Utilities for formatting engineering calculations as LaTeX."""
     
     @staticmethod
-    def format_value(value: Any, index: int = 0, precision: int = 2) -> str:
+    def _format_number_sigfigs(num_val: float, sig_figs: int) -> str:
         """
-        Format a value for LaTeX display.
+        Format a number with significant figures, removing trailing zeros.
+        
+        Uses scientific notation when digits exceed sig_figs.
+        
+        Args:
+            num_val: The numeric value to format
+            sig_figs: Number of significant figures
+            
+        Returns:
+            Formatted string with proper significant figures
+        """
+        import re
+        import math
+        
+        # Handle special cases
+        if num_val == 0:
+            return "0"
+        if not np.isfinite(num_val):
+            return str(num_val)
+        
+        # Calculate the number of digits before the decimal point
+        abs_val = abs(num_val)
+        if abs_val >= 1:
+            num_digits = int(math.floor(math.log10(abs_val))) + 1
+        else:
+            num_digits = 0
+        
+        # Use scientific notation if the number of digits exceeds sig_figs
+        # or if the number is very small (< 0.001)
+        if num_digits > sig_figs or (abs_val < 0.001 and abs_val != 0):
+            # Format in scientific notation
+            formatted = f"{num_val:.{sig_figs - 1}e}"
+            # Parse the exponential notation
+            match = re.match(r'([+-]?\d+\.?\d*)[eE]([+-]?\d+)', formatted)
+            if match:
+                mantissa, exponent = match.groups()
+                # Remove leading + from exponent and convert to int to remove leading zeros
+                exponent = str(int(exponent))
+                # Remove trailing zeros and decimal point from mantissa
+                mantissa = mantissa.rstrip('0').rstrip('.')
+                return f"{mantissa} \\times 10^{{{exponent}}}"
+        else:
+            # Use standard formatting with g specifier (removes trailing zeros)
+            formatted = f"{num_val:.{sig_figs}g}"
+            
+            # Check if Python's g formatter switched to exponential when we don't want it
+            if 'e' in formatted or 'E' in formatted:
+                # Fall back to fixed precision
+                if num_digits > 0:
+                    decimal_places = max(0, sig_figs - num_digits)
+                    formatted = f"{num_val:.{decimal_places}f}".rstrip('0').rstrip('.')
+                else:
+                    formatted = f"{num_val:.{sig_figs}g}"
+            
+            return formatted
+    
+    @staticmethod
+    def format_value(value: Any, index: int = 0, precision: int = 3) -> str:
+        """
+        Format a value for LaTeX display with significant figures.
         
         Handles Pint Quantities by extracting magnitude and unit.
+        Removes trailing zeros and uses scientific notation for large numbers.
         
         Args:
             value: Value to format (scalar, array, Series, Quantity, or formula)
             index: Index to extract if value is array-like
-            precision: Number of decimal places
+            precision: Number of significant figures (default 3)
             
         Returns:
             Formatted LaTeX string with units if applicable
         """
         # Handle Pint Quantities
         if is_quantity(value):
+            # Convert to appropriate display units based on dimensionality
+            # This ensures we show kN·m instead of N·mm, kN instead of N, etc.
+            try:
+                # Check dimensionality and convert to appropriate units
+                dims = value.dimensionality
+                
+                # Force/Load: [mass] * [length] / [time]^2 -> convert to kN
+                if dims == '[mass] * [length] / [time] ** 2':
+                    value = value.to('kN')
+                # Moment/Torque: [mass] * [length]^2 / [time]^2 -> convert to kN·m  
+                elif dims == '[mass] * [length] ** 2 / [time] ** 2':
+                    value = value.to('kN * m')
+                # Stress/Pressure: [mass] / [length] / [time]^2 -> convert to MPa
+                elif dims == '[mass] / [length] / [time] ** 2':
+                    value = value.to('MPa')
+                # Length: convert to m or mm based on magnitude
+                elif dims == '[length]':
+                    mag = abs(value.to('m').magnitude)
+                    if mag < 0.01:  # Less than 10mm, use mm
+                        value = value.to('mm')
+                    else:
+                        value = value.to('m')
+                # Area: convert to mm^2
+                elif dims == '[length] ** 2':
+                    value = value.to('mm**2')
+                # Moment of Inertia: convert to mm^4
+                elif dims == '[length] ** 4':
+                    value = value.to('mm**4')
+                # Otherwise leave as-is (will use compact format)
+            except:
+                # If conversion fails, just use the value as-is
+                pass
+            
             # Extract magnitude for the specific index
             magnitude = value.magnitude
             if isinstance(magnitude, pd.Series):
@@ -90,8 +183,11 @@ class LaTeXFormatter:
             else:
                 num_val = float(magnitude)
             
-            # Get compact unit string
+            # Get compact unit string (preserves original units as stored)
             unit_str = get_compact_unit_string(value)
+            
+            # Format the number with significant figures
+            num_str = LaTeXFormatter._format_number_sigfigs(num_val, precision)
             
             # Format with units
             if unit_str and unit_str != 'dimensionless':
@@ -113,11 +209,11 @@ class LaTeXFormatter:
                             # Keep as-is if no match (shouldn't happen normally)
                             formatted_parts.append(part)
                     formatted_unit = ' \\cdot '.join(formatted_parts)
-                    return f"{num_val:.{precision}f} \\, {formatted_unit}"
+                    return f"{num_str} \\, {formatted_unit}"
                 else:
-                    return f"{num_val:.{precision}f} \\, \\text{{{unit_str}}}"
+                    return f"{num_str} \\, \\text{{{unit_str}}}"
             else:
-                return f"{num_val:.{precision}f}"
+                return num_str
         
         # Extract single value from various types
         if isinstance(value, (float, int)):
@@ -135,8 +231,8 @@ class LaTeXFormatter:
             else:
                 num_val = float(value)
         
-        # Format the number (no units for non-Quantity values)
-        return f"{num_val:.{precision}f}"
+        # Format the number with significant figures
+        return LaTeXFormatter._format_number_sigfigs(num_val, precision)
     
     @staticmethod
     def format_parameter_table(params: Dict[str, Param]) -> str:
@@ -231,7 +327,8 @@ class LaTeXFormatter:
     @staticmethod
     def format_check_summary(
         checks: List[Any],
-        index: int = 0
+        index: int = 0,
+        precision: int = 3
     ) -> str:
         """
         Generate LaTeX summary of all checks.
@@ -239,6 +336,7 @@ class LaTeXFormatter:
         Args:
             checks: List of EngineeringCheck objects
             index: Index for array-like results
+            precision: Number of significant figures for numeric output (default 3)
             
         Returns:
             LaTeX string summarizing check results
@@ -248,7 +346,7 @@ class LaTeXFormatter:
         
         check_lines = []
         for check in checks:
-            latex = check.generate_latex(index)
+            latex = check.generate_latex(index, precision)
             if latex:  # Skip empty checks
                 check_lines.append(latex)
         

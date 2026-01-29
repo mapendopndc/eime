@@ -2,7 +2,7 @@
 import numpy as np
 from pint import UnitRegistry
 from Pynite.FEModel3D import FEModel3D
-from preprocessor.pynite_shear import prepare_shear_segment_arrays, compute_sum_g
+from design.csa_o86_2025.shear_segments import prepare_shear_segment_arrays, compute_sum_g
 from design.csa_o86_2025.formulas.glulam_shear import g_factor
 
 # Initialize

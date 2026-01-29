@@ -7,21 +7,21 @@ using the full EIME workflow with PyNite FEM analysis.
 
 import streamlit as st
 import numpy as np
-import plotly.graph_objects as go
 from pint import UnitRegistry
-from Pynite.FEModel3D import FEModel3D
 import warnings
 
 # Suppress division warnings from Pint
 warnings.filterwarnings('ignore', 'invalid value encountered in divide', RuntimeWarning)
 
-from preprocessor import Beam, BeamMesh, GeometryMapper, AnalysisMapper, LoadDurationMapper, ParameterAssembler
-from preprocessor.analysis import map_pynite_to_stations
+from preprocessor import GeometryMapper, AnalysisMapper, LoadDurationMapper, ParameterAssembler
+from preprocessor.pynite_csa_mapper import map_pynite_to_stations
 from design.csa_o86_2025.calculators.timber_member import (
-    RectangularProfile, TimberMaterial, TimberSection,
     TimberDesignParameters, TimberLoads, TimberLoadingParameters, TimberBeamDesign
 )
-from load.nbcc2020 import nbcc_uls_combinations
+
+# Import new modular components
+from model_builder import ModelBuilder, ModelConfig, BeamConfig, SectionConfig, LoadConfig, LoadCombinationConfig, create_default_model
+from visualization import get_diagram_data, create_diagram_figure, add_shear_segment_annotations
 
 # Initialize unit registry
 ureg = UnitRegistry()
@@ -32,331 +32,53 @@ MPa = ureg.MPa
 kPa = ureg.kPa
 nd = ureg.dimensionless
 
-
 @st.cache_resource
-def create_beam_model():
-    """Create and analyze simply supported beam model."""
-    
-    # ==========================================
-    # 1. DEFINE BEAM GEOMETRY
-    # ==========================================
-    
-    # Continuous beam: 2 spans of 4m each
-    # Bracing every 2m
-    beam = Beam(
-        support_locations=[0, 4, 8],  # Continuous with middle support
-        bracing_locations=[0, 2, 4, 6, 8]  # Bracing every 2m
-    )
-    
-    # ==========================================
-    # 2. GENERATE MESH
-    # ==========================================
-    
-    mesh = BeamMesh(
-        beam,
-        spacing=0.2,  # 200mm spacing
-        refine_at_discontinuities=True
-    )
-    
-    # ==========================================
-    # 3. DEFINE SECTION AND MATERIAL
-    # ==========================================
-    
-    # 175 x 456 mm glulam beam
-    profile = RectangularProfile(b=175*mm, d=456*mm)
-    material = TimberMaterial(grade="20f-E", species="Douglas Fir-Larch", ureg=ureg)
-    section = TimberSection(profile=profile, material=material)
-    
-    # ==========================================
-    # 4. CREATE PYNITE FEM MODEL
-    # ==========================================
-    
-    model = FEModel3D()
-    
-    # Material properties
-    E_val = material.E.to(MPa).magnitude
-    G_val = E_val * 0.4
-    
-    # Section properties
-    I_val = profile.MomentofInertia().to(mm**4).magnitude / 1e12  # m^4
-    A_val = profile.Area().to(mm**2).magnitude / 1e6  # m^2
-    
-    model.add_material('Glulam', E_val, G_val, 0.6, 500)
-    model.add_section('Rect', A_val, I_val, I_val/2, I_val/2)
-    
-    # Add nodes
-    model.add_node('N1', 0, 0, 0)
-    model.add_node('N2', 4, 0, 0)
-    model.add_node('N3', 8, 0, 0)
-    
-    # Add single continuous member
-    model.add_member('M1', 'N1', 'N3', 'Glulam', 'Rect')
-    
-    # Add supports (pin at ends, roller at middle)
-    model.def_support('N1', True, True, True, True, False, False)  # Pin
-    model.def_support('N2', False, True, True, True, False, False)  # Roller (middle)
-    model.def_support('N3', False, True, True, True, False, False)  # Roller
-    
-    # ==========================================
-    # 5. APPLY LOADS
-    # ==========================================
-    
-    # Distributed loads (kN/m)
-    w_dead = 6.0
-    w_live = 4.0
-    w_snow = 5.0
-    
-    member_length = 8.0  # Full continuous beam length
-    first_span_length = 4.0  # First span only
-    
-    # Apply dead load to entire beam
-    model.add_member_dist_load('M1', 'Fy', -w_dead, -w_dead, 0, member_length, 'D')
-    
-    # Apply snow load to first span, live load to second span
-    model.add_member_dist_load('M1', 'Fy', -w_snow, -w_snow, 0, first_span_length, 'S')
-    model.add_member_dist_load('M1', 'Fy', -w_live, -w_live, first_span_length, member_length, 'L')
-    
-    # Add live load point load on snow side (first span) at midspan
-    P_live = 20.0  # kN
-    model.add_member_pt_load('M1', 'Fy', -P_live, first_span_length/3, 'L')
-    
-    # Define load combinations
-    load_combos = {
-        # Individual load cases (unfactored)
-        'D': {'D': 1.0},
-        'L': {'L': 1.0},
-        'S': {'S': 1.0},
-        # Factored combinations
-        '1.4D': {'D': 1.4},
-        '1.25D+1.5L': {'D': 1.25, 'L': 1.5},
-        '1.25D+1.5S': {'D': 1.25, 'S': 1.5},
-        '1.25D+1.5L+0.5S': {'D': 1.25, 'L': 1.5, 'S': 0.5},
-        '1.25D+0.5L+1.5S': {'D': 1.25, 'L': 0.5, 'S': 1.5},
-    }
-    
-    for combo_name, factors in load_combos.items():
-        model.add_load_combo(combo_name, factors)
-    
-    # ==========================================
-    # 6. ANALYZE MODEL
-    # ==========================================
-    
-    model.analyze(check_statics=False)
-    
-    return {
-        'beam': beam,
-        'mesh': mesh,
-        'section': section,
-        'material': material,
-        'model': model,
-        'load_combos': load_combos,
-        'loads': {'D': w_dead, 'L': w_live, 'S': w_snow, 'P_live': P_live}
-    }
+def create_beam_model(config: ModelConfig = None):
+    """Create and analyze beam model from configuration."""
+    if config is None:
+        # Use default configuration
+        return create_default_model(ureg)
+    else:
+        # Use custom configuration
+        builder = ModelBuilder(config, ureg)
+        return builder.build()
 
 
-def get_diagram_data(model, member_names, load_combo, diagram_type, load_combos_dict, num_points=100):
-    """Extract diagram data from PyNite model for multiple members."""
-    if isinstance(member_names, str):
-        member_names = [member_names]
-    
-    all_x = []
-    all_y = []
-    x_offset = 0.0
-    
-    for member_name in member_names:
-        member = model.members[member_name]
-        L = member.L()
-        x = np.linspace(0, L, num_points)
-        
-        if diagram_type == 'loading':
-            # Get distributed loads for this load combination
-            y = np.zeros(num_points)
-            
-            # Check if this is a combination
-            if load_combo in load_combos_dict:
-                # Apply load combination factors
-                combo_factors = load_combos_dict[load_combo]
-                for load in member.DistLoads:
-                    load_case = load[5]  # Load case name is at index 5
-                    if load_case in combo_factors:
-                        factor = combo_factors[load_case]
-                        # Get load start and end positions
-                        x_start = load[3]  # Start position along member
-                        x_end = load[4]    # End position along member
-                        w1 = load[1]       # Start magnitude (negative for downward)
-                        w2 = load[2]       # End magnitude (negative for downward)
-                        
-                        # Apply load only within its defined range
-                        for i, xi in enumerate(x):
-                            if x_start <= xi <= x_end:
-                                # Linear interpolation for varying loads
-                                if x_end > x_start:
-                                    w_at_x = w1 + (w2 - w1) * (xi - x_start) / (x_end - x_start)
-                                else:
-                                    w_at_x = w1
-                                y[i] -= w_at_x * factor
-            else:
-                # Single load case (unfactored)
-                for load in member.DistLoads:
-                    if load[5] == load_combo:  # Load case name is at index 5
-                        # Get load start and end positions
-                        x_start = load[3]  # Start position along member
-                        x_end = load[4]    # End position along member
-                        w1 = load[1]       # Start magnitude (negative for downward)
-                        w2 = load[2]       # End magnitude (negative for downward)
-                        
-                        # Apply load only within its defined range
-                        for i, xi in enumerate(x):
-                            if x_start <= xi <= x_end:
-                                # Linear interpolation for varying loads
-                                if x_end > x_start:
-                                    w_at_x = w1 + (w2 - w1) * (xi - x_start) / (x_end - x_start)
-                                else:
-                                    w_at_x = w1
-                                y[i] -= w_at_x
-        
-        elif diagram_type == 'shear':
-            y = np.array([member.shear('Fy', xi, load_combo) for xi in x])
-        
-        elif diagram_type == 'moment':
-            y = np.array([member.moment('Mz', xi, load_combo) for xi in x])
-        
-        else:
-            y = np.zeros(num_points)
-        
-        all_x.append(x + x_offset)
-        all_y.append(y)
-        x_offset += L
-    
-    return np.concatenate(all_x), np.concatenate(all_y)
+def get_member_names(beam_data):
+    """Extract member names from model based on beam configuration."""
+    num_supports = len(beam_data['config'].beam.support_locations)
+    num_members = num_supports - 1
+    return [f'M{i+1}' for i in range(num_members)]
 
 
-def analyze_station(beam_data, load_combo, station_idx):
-    """Analyze a specific station for a given load combo."""
+def get_total_beam_length(beam_data):
+    """Get total beam length from configuration."""
+    support_locs = beam_data['config'].beam.support_locations
+    return support_locs[-1] - support_locs[0]
+
+
+
+def analyze_station(beam_data, design_data, load_combo, station_idx):
+    """Extract analysis for a specific station from pre-calculated design data."""
     
-    model = beam_data['model']
     mesh = beam_data['mesh']
-    beam = beam_data['beam']
-    section = beam_data['section']
-    active_loads = beam_data['load_combos'].get(load_combo, {})
-    
-    # Use the same ureg as the material to ensure consistency
-    material_ureg = section.material.f_b._REGISTRY
-    m = material_ureg.m
-    mm = material_ureg.mm
+    material_ureg = beam_data['section'].material.f_b._REGISTRY
     kN = material_ureg.kN
-    nd = material_ureg.dimensionless
-    N = material_ureg.N
+    m = material_ureg.m
     
     x_station = mesh.x_stations[station_idx]
     
-    # ==========================================
-    # Extract demands from PyNite
-    # ==========================================
-    
-    # Get demands for ALL stations first (needed for proper mapper operation)
-    all_demands = map_pynite_to_stations(
-        model=model,
-        member_name='M1',
-        x_stations=mesh.x_stations,
-        load_combo=load_combo,
-        load_cases=['D', 'L', 'S'],
-        beam_length=8.0,
-        ureg=material_ureg
-    )
-    
-    # ==========================================
-    # Map parameters for all stations
-    # ==========================================
-    
-    geom_mapper = GeometryMapper(beam, mesh)
-    geom_params = geom_mapper.map()
-    
-    analysis_mapper = AnalysisMapper(mesh, all_demands, material_ureg)
-    analysis_params = analysis_mapper.map()
-    
-    # Determine which load cases are active in this combination
-    active_loads = list(beam_data['load_combos'][load_combo].keys())
-    
-    duration_mapper = LoadDurationMapper(mesh, analysis_params, active_load_cases=active_loads)
-    duration_params = duration_mapper.map()
-    
-    # ==========================================
-    # Extract single station data
-    # ==========================================
-    
-    # Now extract the single station values for display and design
-    
-    # ==========================================
-    # Extract single station data
-    # ==========================================
-    
-    # Now extract the single station values for display and design
-    
-    assembler = ParameterAssembler(
-        beam, mesh,
-        geom_params, analysis_params, duration_params,
-        ureg=material_ureg,
-        beam_id_prefix='SSB'
-    )
-    params = assembler.assemble()
-    
-    # ==========================================
-    # Create design inputs
-    # ==========================================
-    
-    # Determine load combo type based on active loads
-    has_live = 'L' in active_loads
-    has_snow = 'S' in active_loads
-    
-    if has_live or has_snow:
-        load_combo_type = 'includes_live'
-    else:
-        load_combo_type = 'dead_only'
-    
-    # Extract single station values from arrays
-    design_params = TimberDesignParameters(
-        beam_ids=[params['beam_ids'][station_idx]],
-        beam_length=np.array([geom_params['span_lengths'][station_idx]]) * m,
-        end_conditions="Pin - Pin",
-        service_conditions="Dry-service conditions",
-        lu_strong=np.array([geom_params['lu_strong'][station_idx]]) * m,
-        lu_weak=np.array([geom_params['lu_weak'][station_idx]]) * m,
-        Wf=np.array([analysis_params['W_f'][station_idx]]) * kN,
-        SumG=np.array([analysis_params['Sum_G'][station_idx]]) * kN**5 * mm,
-        L_zbg=np.array([analysis_params['L_zbg'][station_idx]]) * m,
-        ureg=material_ureg
-    )
-    
-    loads = TimberLoads()
-    loads.M3 = np.array([analysis_params['M_f'][station_idx]]) * kN * m
-    loads.V2 = np.array([analysis_params['V_f'][station_idx]]) * kN
-    loads.P = np.array([analysis_params['P_f'][station_idx]]) * kN
-    
-    loading_params = TimberLoadingParameters(
-        P_L_M=np.array([duration_params['P_L_M'][station_idx]]) * nd,
-        P_S_M=np.array([duration_params['P_S_M'][station_idx]]) * nd,
-        P_L_V=np.array([duration_params['P_L_V'][station_idx]]) * nd,
-        P_S_V=np.array([duration_params['P_S_V'][station_idx]]) * nd,
-        P_L_P=np.array([duration_params['P_L_P'][station_idx]]) * nd,
-        P_S_P=np.array([duration_params['P_S_P'][station_idx]]) * nd,
-        load_combo_types=[load_combo_type],
-        ureg=material_ureg
-    )
-    
-    # ==========================================
-    # Run design
-    # ==========================================
-    
-    design = TimberBeamDesign(
-        section=section,
-        loading=loads,
-        parameters=design_params,
-        loading_params=loading_params
-    )
-    
-    bending_proc = design.BendingResistance(axis='strong', sign='pos')
-    shear_proc = design.ShearResistance(axis='strong')
+    # Get pre-calculated data for this load combo
+    combo_data = design_data[load_combo]
+    all_demands = combo_data['all_demands']
+    geom_params = combo_data['geom_params']
+    analysis_params = combo_data['analysis_params']
+    duration_params = combo_data['duration_params']
+    active_loads = combo_data['active_loads']
+    bending_proc = combo_data['bending_proc']
+    shear_proc = combo_data['shear_proc']
+    M_r_array = combo_data['M_r_array']
+    V_r_array = combo_data['V_r_array']
     
     return {
         'x_station': x_station,
@@ -387,21 +109,23 @@ def analyze_station(beam_data, load_combo, station_idx):
             'V_L': all_demands['V_L'][station_idx],
             'V_S': all_demands['V_S'][station_idx],
             'l_a': analysis_params['l_a'][station_idx],
-            'l_b': analysis_params['l_b'][station_idx],
         },
         'design': {
             'bending_proc': bending_proc,
             'shear_proc': shear_proc,
         },
         'results': {
-            'M_r': bending_proc.results.get('M_r', [None])[0] if 'M_r' in bending_proc.results and hasattr(bending_proc.results['M_r'], '__len__') else bending_proc.results.get('M_r', None),
-            'V_r': shear_proc.results.get('V_r', [None])[0] if 'V_r' in shear_proc.results and hasattr(shear_proc.results['V_r'], '__len__') else shear_proc.results.get('V_r', None),
+            'M_r': M_r_array[station_idx] if hasattr(M_r_array, '__getitem__') else M_r_array,
+            'V_r': V_r_array[station_idx] if hasattr(V_r_array, '__getitem__') else V_r_array,
         }
     }
 
 
-def calculate_all_resistances(beam_data, load_combos):
-    """Calculate resistances for all stations and all load combinations in batch."""
+def calculate_all_design_data(beam_data, load_combos):
+    """Calculate complete design data for all stations and all load combinations in batch.
+    
+    This runs TimberBeamDesign once for each load combination and caches all results.
+    """
     model = beam_data['model']
     mesh = beam_data['mesh']
     beam = beam_data['beam']
@@ -414,30 +138,75 @@ def calculate_all_resistances(beam_data, load_combos):
     kN = material_ureg.kN
     nd = material_ureg.dimensionless
     
-    all_resistances = {}
+    # Get beam length, member names, and support locations
+    beam_length = get_total_beam_length(beam_data)
+    member_names = get_member_names(beam_data)
+    support_locs = beam_data['config'].beam.support_locations
+    
+    # ==========================================
+    # Calculate geometry parameters ONCE (load-independent)
+    # ==========================================
+    geom_mapper = GeometryMapper(beam, mesh)
+    geom_params = geom_mapper.map()
+    
+    all_design_data = {}
     
     # Process all load combinations
     for load_combo in load_combos:
-        # ==========================================
-        # Extract demands from PyNite for ALL stations at once
-        # ==========================================
+        # Extract demands from PyNite for ALL members and combine
+        num_stations = len(mesh.x_stations)
+        all_demands = {
+            'M_f': np.zeros(num_stations),
+            'V_f': np.zeros(num_stations),
+            'P_f': np.zeros(num_stations),
+            'W_f': np.zeros(num_stations),
+            'Sum_G': np.zeros(num_stations),
+            'M_D': np.zeros(num_stations),
+            'M_L': np.zeros(num_stations),
+            'M_S': np.zeros(num_stations),
+            'V_D': np.zeros(num_stations),
+            'V_L': np.zeros(num_stations),
+            'V_S': np.zeros(num_stations),
+            'l_a': np.zeros(num_stations),
+            'L_zbg': np.zeros(num_stations),
+        }
         
-        all_demands = map_pynite_to_stations(
-            model=model,
-            member_name='M1',
-            x_stations=mesh.x_stations,
-            load_combo=load_combo,
-            load_cases=['D', 'L', 'S'],
-            beam_length=8.0,
-            ureg=material_ureg
-        )
+        # Process each member
+        for i, member_name in enumerate(member_names):
+            member_start = support_locs[i]
+            member_end = support_locs[i + 1]
+            member_length = member_end - member_start
+            
+            # Find stations that belong to this member
+            member_stations_mask = (mesh.x_stations >= member_start) & (mesh.x_stations <= member_end)
+            member_station_indices = np.where(member_stations_mask)[0]
+            
+            if len(member_station_indices) == 0:
+                continue
+            
+            # Get local x-coordinates for this member
+            local_x_stations = mesh.x_stations[member_station_indices] - member_start
+            
+            # Extract demands for this member
+            member_demands = map_pynite_to_stations(
+                model=model,
+                member_name=member_name,
+                x_stations=local_x_stations,
+                load_combo=load_combo,
+                load_cases=['D', 'L', 'S'],
+                beam_length=member_length * m,
+                ureg=material_ureg
+            )
+            
+            # Copy demands to combined arrays
+            for key in all_demands.keys():
+                if key in member_demands:
+                    all_demands[key][member_station_indices] = member_demands[key]
     
         # ==========================================
         # Map parameters for ALL stations at once
         # ==========================================
-        
-        geom_mapper = GeometryMapper(beam, mesh)
-        geom_params = geom_mapper.map()
+        # Note: geom_params calculated once outside loop (load-independent)
         
         analysis_mapper = AnalysisMapper(mesh, all_demands, material_ureg)
         analysis_params = analysis_mapper.map()
@@ -492,9 +261,9 @@ def calculate_all_resistances(beam_data, load_combos):
         )
         
         loads = TimberLoads()
-        loads.M3 = np.array(analysis_params['M_f']) * kN * m
-        loads.V2 = np.array(analysis_params['V_f']) * kN
-        loads.P = np.array(analysis_params['P_f']) * kN
+        loads.M3 = np.array(all_demands['M_f']) * kN * m
+        loads.V2 = np.array(all_demands['V_f']) * kN
+        loads.P = np.array(all_demands['P_f']) * kN
         
         loading_params = TimberLoadingParameters(
             P_L_M=np.array(duration_params['P_L_M']) * nd,
@@ -522,7 +291,7 @@ def calculate_all_resistances(beam_data, load_combos):
         shear_proc = design.ShearResistance(axis='strong')
         
         # ==========================================
-        # Extract resistance arrays
+        # Extract and store all results
         # ==========================================
         
         M_r_array = bending_proc.results.get('M_r', np.zeros(num_stations))
@@ -539,14 +308,23 @@ def calculate_all_resistances(beam_data, load_combos):
         else:
             V_r_values = [0] * num_stations
         
-        # Store results for this load combo
-        all_resistances[load_combo] = {
+        # Store complete results for this load combo
+        all_design_data[load_combo] = {
             'x_stations': mesh.x_stations.tolist() if hasattr(mesh.x_stations, 'tolist') else list(mesh.x_stations),
             'M_r': M_r_values,
-            'V_r': V_r_values
+            'V_r': V_r_values,
+            'M_r_array': M_r_array,
+            'V_r_array': V_r_array,
+            'all_demands': all_demands,
+            'geom_params': geom_params,
+            'analysis_params': analysis_params,
+            'duration_params': duration_params,
+            'active_loads': active_load_cases,
+            'bending_proc': bending_proc,
+            'shear_proc': shear_proc
         }
     
-    return all_resistances
+    return all_design_data
 
 
 def main():
@@ -558,11 +336,208 @@ def main():
     st.markdown("---")
     
     # ==========================================
+    # SIDEBAR CONFIGURATION
+    # ==========================================
+    
+    st.sidebar.header("⚙️ Model Configuration")
+    
+    # Create configuration from sidebar inputs
+    with st.sidebar.expander("📐 Geometry", expanded=False):
+        st.write("**Support Locations (m):**")
+        support_input = st.text_input(
+            "Comma-separated values",
+            value="0, 4, 8",
+            key="supports"
+        )
+        support_locations = [float(x.strip()) for x in support_input.split(",")]
+        
+        st.write("**Bracing Locations (m):**")
+        bracing_input = st.text_input(
+            "Comma-separated values",
+            value="0, 2, 4, 6, 8",
+            key="bracing"
+        )
+        bracing_locations = [float(x.strip()) for x in bracing_input.split(",")]
+        
+        mesh_spacing = st.number_input(
+            "Mesh spacing (m)",
+            min_value=0.05,
+            max_value=1.0,
+            value=0.2,
+            step=0.05,
+            key="mesh_spacing"
+        )
+    
+    with st.sidebar.expander("📏 Section Properties", expanded=False):
+        width_mm = st.number_input(
+            "Width (mm)",
+            min_value=50.0,
+            max_value=500.0,
+            value=175.0,
+            step=5.0,
+            key="width"
+        )
+        
+        depth_mm = st.number_input(
+            "Depth (mm)",
+            min_value=100.0,
+            max_value=1000.0,
+            value=456.0,
+            step=10.0,
+            key="depth"
+        )
+        
+        grade = st.selectbox(
+            "Grade",
+            options=["20f-E", "24f-E", "16c-E"],
+            index=0,
+            key="grade"
+        )
+        
+        species = st.selectbox(
+            "Species",
+            options=["Douglas Fir-Larch", "Hem-Fir", "Spruce-Pine"],
+            index=0,
+            key="species"
+        )
+    
+    with st.sidebar.expander("📦 Applied Loads", expanded=False):
+        dead_load = st.number_input(
+            "Dead Load (kN/m)",
+            min_value=0.0,
+            max_value=50.0,
+            value=6.0,
+            step=0.5,
+            key="dead_load"
+        )
+        
+        live_load = st.number_input(
+            "Live Load (kN/m)",
+            min_value=0.0,
+            max_value=50.0,
+            value=4.0,
+            step=0.5,
+            key="live_load"
+        )
+        
+        snow_load = st.number_input(
+            "Snow Load (kN/m)",
+            min_value=0.0,
+            max_value=50.0,
+            value=5.0,
+            step=0.5,
+            key="snow_load"
+        )
+        
+        st.write("**Load Ranges:**")
+        st.caption("Leave empty to apply to entire beam")
+        
+        # Simplified: just specify if snow is on first span
+        apply_snow_first_span = st.checkbox(
+            "Apply Snow to first span only",
+            value=True,
+            key="snow_first_span"
+        )
+        
+        apply_live_second_span = st.checkbox(
+            "Apply Live to second span only",
+            value=True,
+            key="live_second_span"
+        )
+        
+        add_point_load = st.checkbox(
+            "Add point load",
+            value=True,
+            key="add_point"
+        )
+        
+        if add_point_load:
+            point_magnitude = st.number_input(
+                "Point Load (kN)",
+                min_value=0.0,
+                max_value=100.0,
+                value=20.0,
+                step=5.0,
+                key="point_mag"
+            )
+            
+            point_position = st.number_input(
+                "Point Load Position (m)",
+                min_value=0.0,
+                max_value=support_locations[-1],
+                value=support_locations[1] / 3 if len(support_locations) > 1 else 1.0,
+                step=0.1,
+                key="point_pos"
+            )
+            
+            point_case = st.selectbox(
+                "Point Load Case",
+                options=["D", "L", "S"],
+                index=1,
+                key="point_case"
+            )
+    
+    # Build configuration object
+    beam_config = BeamConfig(
+        support_locations=support_locations,
+        bracing_locations=bracing_locations,
+        mesh_spacing=mesh_spacing,
+        refine_at_discontinuities=True
+    )
+    
+    section_config = SectionConfig(
+        width_mm=width_mm,
+        depth_mm=depth_mm,
+        grade=grade,
+        species=species
+    )
+    
+    # Setup load ranges
+    load_ranges = {'D': [(support_locations[0], support_locations[-1])]}
+    
+    if apply_snow_first_span and len(support_locations) > 1:
+        load_ranges['S'] = [(support_locations[0], support_locations[1])]
+    else:
+        load_ranges['S'] = [(support_locations[0], support_locations[-1])]
+    
+    if apply_live_second_span and len(support_locations) > 2:
+        load_ranges['L'] = [(support_locations[1], support_locations[-1])]
+    else:
+        load_ranges['L'] = [(support_locations[0], support_locations[-1])]
+    
+    point_loads = []
+    if add_point_load:
+        point_loads.append((point_magnitude, point_position, point_case))
+    
+    load_config = LoadConfig(
+        dead_load=dead_load,
+        live_load=live_load,
+        snow_load=snow_load,
+        point_loads=point_loads,
+        load_ranges=load_ranges
+    )
+    
+    model_config = ModelConfig(
+        beam=beam_config,
+        section=section_config,
+        loads=load_config,
+        load_combinations=LoadCombinationConfig()  # Use defaults
+    )
+    
+    # Button to rebuild model with new configuration
+    if st.sidebar.button("🔄 Rebuild Model", type="primary"):
+        st.cache_resource.clear()
+        st.rerun()
+    
+    st.sidebar.markdown("---")
+    st.sidebar.caption("💡 Modify settings and click 'Rebuild Model' to update")
+    
+    # ==========================================
     # CREATE MODEL
     # ==========================================
     
     with st.spinner("Creating beam model..."):
-        beam_data = create_beam_model()
+        beam_data = create_beam_model(model_config)
     
     model = beam_data['model']
     mesh = beam_data['mesh']
@@ -589,17 +564,25 @@ def main():
         )
     
     # ==========================================
-    # CALCULATE RESISTANCES FOR ALL LOAD COMBOS (cached)
+    # CALCULATE ALL DESIGN DATA ONCE (cached)
     # ==========================================
     
+    # Cache the complete design calculation in session state
+    if 'all_design_data' not in st.session_state:
+        with st.spinner("Running design calculations for all load combinations..."):
+            st.session_state.all_design_data = calculate_all_design_data(beam_data, load_combos)
+    
+    design_data = st.session_state.all_design_data
+    
+    # Extract resistances for plotting if needed
     if diagram_type in ['shear', 'moment']:
-        # Cache the resistances calculation in session state
-        if 'all_resistances' not in st.session_state:
-            with st.spinner("Calculating resistances for all load combinations..."):
-                st.session_state.all_resistances = calculate_all_resistances(beam_data, load_combos)
-        
-        # Get resistances for the selected combo
-        resistances = st.session_state.all_resistances.get(selected_combo, {})
+        resistances = {
+            'x_stations': design_data[selected_combo]['x_stations'],
+            'M_r': design_data[selected_combo]['M_r'],
+            'V_r': design_data[selected_combo]['V_r']
+        }
+    else:
+        resistances = None
     
     # ==========================================
     # DIAGRAM DISPLAY
@@ -607,146 +590,41 @@ def main():
     
     st.subheader(f"{diagram_type.capitalize()} Diagram - {selected_combo}")
     
-    x_data, y_data = get_diagram_data(model, 'M1', selected_combo, diagram_type, beam_data['load_combos'])
-    
-    fig = go.Figure()
-    fig.add_trace(go.Scatter(
-        x=x_data,
-        y=y_data,
-        mode='lines',
-        name=diagram_type.capitalize(),
-        line=dict(width=3, color='#1f77b4')
-    ))
-    
-    # Add support markers
-    fig.add_trace(go.Scatter(
-        x=[0, 4, 8],
-        y=[0, 0, 0],
-        mode='markers',
-        name='Supports',
-        marker=dict(size=12, color='red', symbol='triangle-up')
-    ))
-    
-    # Add resistance line series for moment and shear diagrams
-    if diagram_type == 'moment' and 'resistances' in locals():
-        # Add moment resistance as a line series
-        fig.add_trace(go.Scatter(
-            x=resistances['x_stations'],
-            y=resistances['M_r'],
-            mode='lines',
-            name='M_r (Resistance)',
-            line=dict(width=2, color='red', dash='dash')
-        ))
-    
-    elif diagram_type == 'shear' and 'resistances' in locals():
-        # Add shear resistance as line series (positive and negative)
-        fig.add_trace(go.Scatter(
-            x=resistances['x_stations'],
-            y=resistances['V_r'],
-            mode='lines',
-            name='V_r (Resistance)',
-            line=dict(width=2, color='red', dash='dash')
-        ))
-        # Add negative resistance line for shear
-        fig.add_trace(go.Scatter(
-            x=resistances['x_stations'],
-            y=[-v for v in resistances['V_r']],
-            mode='lines',
-            name='-V_r (Resistance)',
-            line=dict(width=2, color='red', dash='dash'),
-            showlegend=False
-        ))
-    
-    # Add bracing markers
-    bracing = beam_data['beam'].bracing_locations
-    fig.add_trace(go.Scatter(
-        x=bracing,
-        y=[0] * len(bracing),
-        mode='markers',
-        name='Bracing',
-        marker=dict(size=8, color='green', symbol='diamond')
-    ))
-    
-    # Add segment annotations for shear diagram
-    if diagram_type == 'shear':
-        try:
-            from preprocessor.pynite_shear import prepare_shear_segment_arrays
-            
-            material_ureg = beam_data['section'].material.f_b._REGISTRY
-            m = material_ureg.m
-            
-            # Process both members
-            segment_counter = 0
-            x_offset = 0.0
-            y_min, y_max = min(y_data), max(y_data)
-            
-            for member_name in ['M1']:
-                member = model.members[member_name]
-                member_length = member.L()
-                
-                segment_data = prepare_shear_segment_arrays(
-                    model=model,
-                    member_name=member_name,
-                    load_combo=selected_combo,
-                    beam_length=member_length * m,
-                    num_points=401,  # 401 points for 4m span = 0.01m (10mm) spacing
-                    ureg=material_ureg
-                )
-                
-                # Get segment boundaries
-                cumulative_x = 0
-                
-                for i, l_a in enumerate(segment_data['l_a']):
-                    l_a_val = l_a.to(m).magnitude
-                    segment_counter += 1
-                    
-                    # Add vertical line at segment start
-                    if i == 0:
-                        fig.add_vline(
-                            x=x_offset + cumulative_x,
-                            line_dash="dot",
-                            line_color="gray",
-                            opacity=0.5
-                        )
-                    
-                    # Calculate midpoint for label
-                    segment_midpoint = x_offset + cumulative_x + l_a_val / 2
-                    
-                    # Add annotation at segment midpoint
-                    fig.add_annotation(
-                        x=segment_midpoint,
-                        y=y_max if y_max > 0 else y_min,
-                        text=f"Seg {segment_counter}",
-                        showarrow=False,
-                        yshift=10,
-                        font=dict(size=10, color="purple"),
-                        bgcolor="rgba(255,255,255,0.8)",
-                        borderpad=2
-                    )
-                    
-                    # Add vertical line at segment end
-                    cumulative_x += l_a_val
-                    fig.add_vline(
-                        x=x_offset + cumulative_x,
-                        line_dash="dot",
-                        line_color="gray",
-                        opacity=0.5
-                    )
-                
-                x_offset += member_length
-                
-        except Exception as e:
-            # Display error for debugging
-            st.error(f"Error adding segment annotations: {e}")
-            pass
-    
-    fig.update_layout(
-        xaxis_title="Position (m)",
-        yaxis_title="Value" if diagram_type == 'loading' else ("Shear (kN)" if diagram_type == 'shear' else "Moment (kN·m)"),
-        height=400,
-        hovermode='x unified',
-        showlegend=True
+    # Get member names and diagram data
+    member_names = get_member_names(beam_data)
+    x_data, y_data = get_diagram_data(
+        model, 
+        member_names, 
+        selected_combo, 
+        diagram_type, 
+        beam_data['load_combos']
     )
+    
+    # Create figure
+    fig = create_diagram_figure(
+        x_data=x_data,
+        y_data=y_data,
+        diagram_type=diagram_type,
+        load_combo=selected_combo,
+        support_locations=beam_data['config'].beam.support_locations,
+        bracing_locations=beam_data['config'].beam.bracing_locations,
+        resistances=resistances,
+        height=400
+    )
+    
+    # Add shear segment annotations if needed
+    if diagram_type == 'shear':
+        material_ureg = beam_data['section'].material.f_b._REGISTRY
+        beam_length = get_total_beam_length(beam_data)
+        fig = add_shear_segment_annotations(
+            fig=fig,
+            model=model,
+            member_names=member_names,
+            load_combo=selected_combo,
+            beam_length=beam_length * material_ureg.m,
+            ureg=material_ureg,
+            y_data=y_data
+        )
     
     st.plotly_chart(fig, width='stretch')
     
@@ -773,11 +651,10 @@ def main():
     st.session_state.station_idx = station_idx
     
     # ==========================================
-    # STATION ANALYSIS
+    # STATION ANALYSIS (extract from cached data)
     # ==========================================
     
-    with st.spinner(f"Analyzing station {station_idx}..."):
-        station_data = analyze_station(beam_data, selected_combo, station_idx)
+    station_data = analyze_station(beam_data, design_data, selected_combo, station_idx)
     
     st.info(f"📍 Station {station_idx} at x = {station_data['x_station']:.3f} m")
     
@@ -785,10 +662,11 @@ def main():
     # TABS FOR DETAILED INFORMATION
     # ==========================================
     
-    tab1, tab2, tab3, tab4 = st.tabs([
+    tab1, tab2, tab3, tab4, tab5 = st.tabs([
         "📊 Analysis",
         "⚙️ Preprocessing",
         "🔧 Design",
+        "📋 Procedure Data",
         "✅ Results"
     ])
     
@@ -811,10 +689,27 @@ def main():
         st.markdown("---")
         st.write("**Load Combination:**", selected_combo)
         st.write("**Load Case Breakdown:**")
-        for load_type, value in beam_data['loads'].items():
+        
+        # Display load information from configuration
+        load_config = beam_data['loads']
+        load_mapping = {
+            'D': load_config.dead_load,
+            'L': load_config.live_load,
+            'S': load_config.snow_load
+        }
+        
+        for load_type, value in load_mapping.items():
             factor = beam_data['load_combos'][selected_combo].get(load_type, 0)
-            if factor > 0:
+            if factor > 0 and value > 0:
                 st.write(f"- {load_type}: {value:.1f} kN/m × {factor:.2f} = {value * factor:.2f} kN/m")
+        
+        # Display point loads if any
+        if load_config.point_loads:
+            st.write("**Point Loads:**")
+            for P_mag, P_pos, P_case in load_config.point_loads:
+                factor = beam_data['load_combos'][selected_combo].get(P_case, 0)
+                if factor > 0:
+                    st.write(f"- {P_case} @ {P_pos:.2f}m: {P_mag:.1f} kN × {factor:.2f} = {P_mag * factor:.2f} kN")
     
     with tab2:
         st.subheader("Station Parameters")
@@ -918,21 +813,13 @@ def main():
         
         st.write("**All values from AnalysisMapper for this station:**")
         
-        col1, col2 = st.columns(2)
-        
-        with col1:
-            st.write("**Shear Loads:**")
-            st.write(f"- W_f: {station_data['demands']['W_f']:.2f} kN")
-            st.write(f"- Sum_G: {station_data['demands']['Sum_G']:.2e}")
-        
-        with col2:
-            st.write("**Segment Lengths:**")
-            st.write(f"- l_a: {station_data['preprocessing']['l_a']:.3f} m")
-            st.write(f"- l_b: {station_data['preprocessing']['l_b']:.3f} m")
+        st.write("**Shear Loads:**")
+        st.write(f"- W_f: {station_data['demands']['W_f']:.2f} kN")
+        st.write(f"- Sum_G: {station_data['demands']['Sum_G']:.2e}")
         
         # Show detailed segment breakdown for the segment containing this station
         with st.expander("View G Factor Parameters for This Station's Segment"):
-            from preprocessor.pynite_shear import prepare_shear_segment_arrays, compute_sum_g
+            from design.csa_o86_2025.shear_segments import prepare_shear_segment_arrays, compute_sum_g
             from design.csa_o86_2025.formulas.glulam_shear import g_factor
             
             # Get unit registry from beam_data
@@ -942,7 +829,10 @@ def main():
             model = beam_data['model']
             
             try:
-                # Process both members and combine segment data
+                # Get member names and total length
+                member_names = get_member_names(beam_data)
+                
+                # Process all members and combine segment data
                 all_l_a = []
                 all_V_A = []
                 all_V_B = []
@@ -951,7 +841,7 @@ def main():
                 total_Sum_G = 0
                 x_offset = 0.0
                 
-                for member_name in ['M1']:
+                for member_name in member_names:
                     member = model.members[member_name]
                     member_length = member.L()
                     
@@ -1029,13 +919,14 @@ def main():
         
         st.markdown("---")
         st.write("**Section Properties:**")
-        st.write(f"- Width (b): 175 mm")
-        st.write(f"- Depth (d): 456 mm")
+        section_config = beam_data['config'].section
+        st.write(f"- Width (b): {section_config.width_mm} mm")
+        st.write(f"- Depth (d): {section_config.depth_mm} mm")
         st.write(f"- Area: {beam_data['section'].profile.Area().to(mm**2).magnitude:.0f} mm²")
         st.write(f"- I: {beam_data['section'].profile.MomentofInertia().to(mm**4).magnitude:.2e} mm⁴")
         
         st.write("**Material:**")
-        st.write(f"- Grade: 20f-E Douglas Fir-Larch")
+        st.write(f"- Grade: {section_config.grade} {section_config.species}")
         st.write(f"- f_b: {beam_data['material'].f_b.to(MPa).magnitude:.1f} MPa")
         st.write(f"- f_v: {beam_data['material'].f_v.to(MPa).magnitude:.2f} MPa")
         st.write(f"- E: {beam_data['material'].E.to(MPa).magnitude:.0f} MPa")
@@ -1048,23 +939,98 @@ def main():
         
         # Generate full LaTeX documentation for bending
         st.write("**Bending Resistance Procedure:**")
-        bending_latex = bending_proc.generate_latex(index=0)
+        bending_latex = bending_proc.generate_latex(index=station_idx)
         st.markdown(bending_latex)
         
         st.markdown("---")
         
         # Generate full LaTeX documentation for shear
         st.write("**Shear Resistance Procedure:**")
-        shear_latex = shear_proc.generate_latex(index=0)
+        shear_latex = shear_proc.generate_latex(index=station_idx)
         st.markdown(shear_latex)
     
     with tab4:
+        st.subheader("Procedure Summary Data")
+        
+        bending_proc = station_data['design']['bending_proc']
+        shear_proc = station_data['design']['shear_proc']
+        
+        st.write("**Bending Resistance Procedure Summary:**")
+        bending_summary = bending_proc.summary()
+        if len(bending_summary) > 0:
+            # Show only the row for the current station
+            st.dataframe(bending_summary.iloc[[station_idx]], width='stretch')
+        else:
+            st.info("No summary data available")
+        
+        st.markdown("---")
+        
+        st.write("**Shear Resistance Procedure Summary:**")
+        shear_summary = shear_proc.summary()
+        if len(shear_summary) > 0:
+            # Show only the row for the current station
+            st.dataframe(shear_summary.iloc[[station_idx]], width='stretch')
+        else:
+            st.info("No summary data available")
+    
+    with tab5:
         st.subheader("Design Results")
         
+        # Get procedures for all stations
+        bending_proc = station_data['design']['bending_proc']
+        shear_proc = station_data['design']['shear_proc']
+        
+        # Calculate utilization for all stations using get_worst_utilization()
+        bending_util = bending_proc.get_worst_utilization()
+        shear_util = shear_proc.get_worst_utilization()
+        
+        # Find worst-case utilization and governing stations
+        max_bending_util_idx = bending_util.idxmax()
+        max_shear_util_idx = shear_util.idxmax()
+        max_bending_util = bending_util.max() * 100
+        max_shear_util = shear_util.max() * 100
+        
+        # Current station values
         M_f = station_data['demands']['M_f']
         V_f = station_data['demands']['V_f']
         M_r = station_data['results']['M_r']
         V_r = station_data['results']['V_r']
+        
+        # Display worst-case utilization across all stations
+        st.write("### Worst-Case Utilization (All Stations)")
+        
+        col1, col2 = st.columns(2)
+        
+        with col1:
+            st.write("**Moment:**")
+            st.metric("Maximum Utilization", f"{max_bending_util:.1f}%",
+                     delta=None,
+                     delta_color="inverse" if max_bending_util <= 100 else "normal")
+            gov_x = mesh.x_stations[max_bending_util_idx]
+            st.write(f"Governing Station: **{max_bending_util_idx}** (x = {gov_x:.3f} m)")
+            
+            if max_bending_util <= 100:
+                st.success("✅ PASS")
+            else:
+                st.error("❌ FAIL")
+        
+        with col2:
+            st.write("**Shear:**")
+            st.metric("Maximum Utilization", f"{max_shear_util:.1f}%",
+                     delta=None,
+                     delta_color="inverse" if max_shear_util <= 100 else "normal")
+            gov_x = mesh.x_stations[max_shear_util_idx]
+            st.write(f"Governing Station: **{max_shear_util_idx}** (x = {gov_x:.3f} m)")
+            
+            if max_shear_util <= 100:
+                st.success("✅ PASS")
+            else:
+                st.error("❌ FAIL")
+        
+        st.markdown("---")
+        
+        # Current station results
+        st.write("### Current Station Results")
         
         col1, col2 = st.columns(2)
         
@@ -1101,14 +1067,13 @@ def main():
         st.markdown("---")
         
         # Overall status
-        if M_r is not None and V_r is not None:
-            max_util = max(util_M, util_V)
-            st.write(f"**Maximum Utilization:** {max_util:.1f}%")
-            
-            if max_util <= 100:
-                st.success("🎉 Station PASSES all checks!")
-            else:
-                st.error("⚠️ Station FAILS - requires larger section or reduced loads")
+        overall_max_util = max(max_bending_util, max_shear_util)
+        st.write(f"**Overall Maximum Utilization:** {overall_max_util:.1f}%")
+        
+        if overall_max_util <= 100:
+            st.success("🎉 Design PASSES all checks!")
+        else:
+            st.error("⚠️ Design FAILS - requires larger section or reduced loads")
 
 
 if __name__ == "__main__":

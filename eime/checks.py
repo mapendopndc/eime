@@ -107,12 +107,13 @@ class EngineeringCheck(ABC):
         pass
     
     @abstractmethod
-    def generate_latex(self, index: int) -> str:
+    def generate_latex(self, index: int, precision: int = 3) -> str:
         """
         Generate LaTeX representation of the check for a specific index.
         
         Args:
             index: Index of the result to display
+            precision: Number of significant figures for numeric output (default 3)
             
         Returns:
             LaTeX string representing the check
@@ -212,38 +213,30 @@ class Upperbound(EngineeringCheck):
         
         return self
     
-    def generate_latex(self, index: int) -> str:
+    def generate_latex(self, index: int, precision: int = 3) -> str:
         """Generate LaTeX representation of upper bound check."""
-        result_val = self._get_single_value(self.formula.result, index)
+        from .output import LaTeXFormatter
         
-        # Get unit string from the formula result
-        unit_str = get_compact_unit_string(self.formula.result)
-        if unit_str:
-            # Handle composite units with \cdot properly
-            if '\\cdot' in unit_str:
-                import re
-                parts = unit_str.split(' \\cdot ')
-                formatted_parts = []
-                for part in parts:
-                    part = part.strip()
-                    match = re.match(r'^([a-zA-Z]+)(\^\{\d+\})?$', part)
-                    if match:
-                        unit_name, superscript = match.groups()
-                        formatted_parts.append(f'\\text{{{unit_name}}}{superscript if superscript else ""}')
-                    else:
-                        formatted_parts.append(f'\\text{{{part}}}')
-                unit_str = f" \\, {' \\cdot '.join(formatted_parts)}"
-            else:
-                unit_str = f" \\, \\text{{{unit_str}}}"
-        
-        # Get bound value
+        # Align bound units to result units for comparison
+        result = self.formula.result
         from .formula import EngineeringFunction
         if isinstance(self.upperbound, EngineeringFunction):
-            bound_val = self._get_single_value(self.upperbound.result, index)
-            bound_str = self.upperbound.name
+            bound = self.upperbound.result
+            bound_label = self.upperbound.name
         else:
-            bound_val = self._get_single_value(self.upperbound, index)
-            bound_str = str(bound_val)
+            bound = self.upperbound
+            bound_label = None
+        
+        if is_quantity(result) and is_quantity(bound):
+            bound = bound.to(result.units)
+        
+        result_val = self._get_single_value(result, index)
+        bound_val = self._get_single_value(bound, index)
+        
+        # Format display values with units
+        result_str = LaTeXFormatter.format_value(result, index, precision)
+        bound_val_str = LaTeXFormatter.format_value(bound, index, precision)
+        bound_str = bound_label if bound_label is not None else bound_val_str
         
         # Determine pass/fail
         if self.inclusive:
@@ -258,7 +251,7 @@ class Upperbound(EngineeringCheck):
         
         check_text = (
             f"{self.formula.name} {operator} {bound_str}"
-            f"&= {result_val:.2f}{unit_str} {operator} {bound_val:.2f}{unit_str} \\\\ "
+            f"&= {result_str} {operator} {bound_val_str} \\\\ "
             f"\\text{{Check}} &= \\text{{{status_msg}}}"
         )
         
@@ -333,38 +326,30 @@ class Lowerbound(EngineeringCheck):
         
         return self
     
-    def generate_latex(self, index: int) -> str:
+    def generate_latex(self, index: int, precision: int = 3) -> str:
         """Generate LaTeX representation of lower bound check."""
-        result_val = self._get_single_value(self.formula.result, index)
+        from .output import LaTeXFormatter
         
-        # Get unit string from the formula result
-        unit_str = get_compact_unit_string(self.formula.result)
-        if unit_str:
-            # Handle composite units with \cdot properly
-            if '\\cdot' in unit_str:
-                import re
-                parts = unit_str.split(' \\cdot ')
-                formatted_parts = []
-                for part in parts:
-                    part = part.strip()
-                    match = re.match(r'^([a-zA-Z]+)(\^\{\d+\})?$', part)
-                    if match:
-                        unit_name, superscript = match.groups()
-                        formatted_parts.append(f'\\text{{{unit_name}}}{superscript if superscript else ""}')
-                    else:
-                        formatted_parts.append(f'\\text{{{part}}}')
-                unit_str = f" \\, {' \\cdot '.join(formatted_parts)}"
-            else:
-                unit_str = f" \\, \\text{{{unit_str}}}"
-        
-        # Get bound value
+        # Align bound units to result units for comparison
+        result = self.formula.result
         from .formula import EngineeringFunction
         if isinstance(self.lowerbound, EngineeringFunction):
-            bound_val = self._get_single_value(self.lowerbound.result, index)
-            bound_str = self.lowerbound.name
+            bound = self.lowerbound.result
+            bound_label = self.lowerbound.name
         else:
-            bound_val = self._get_single_value(self.lowerbound, index)
-            bound_str = str(bound_val)
+            bound = self.lowerbound
+            bound_label = None
+        
+        if is_quantity(result) and is_quantity(bound):
+            bound = bound.to(result.units)
+        
+        result_val = self._get_single_value(result, index)
+        bound_val = self._get_single_value(bound, index)
+        
+        # Format display values with units
+        result_str = LaTeXFormatter.format_value(result, index, precision)
+        bound_val_str = LaTeXFormatter.format_value(bound, index, precision)
+        bound_str = bound_label if bound_label is not None else bound_val_str
         
         # Determine pass/fail
         if self.inclusive:
@@ -379,7 +364,7 @@ class Lowerbound(EngineeringCheck):
         
         check_text = (
             f"{self.formula.name} {operator} {bound_str}"
-            f"&= {result_val:.2f}{unit_str} {operator} {bound_val:.2f}{unit_str} \\\\ "
+            f"&= {result_str} {operator} {bound_val_str} \\\\ "
             f"\\text{{Check}} &= \\text{{{status_msg}}}"
         )
         
@@ -451,37 +436,28 @@ class Equality(EngineeringCheck):
         
         return self
     
-    def generate_latex(self, index: int) -> str:
+    def generate_latex(self, index: int, precision: int = 3) -> str:
         """Generate LaTeX representation of equality check."""
-        result_val = self._get_single_value(self.formula.result, index)
+        from .output import LaTeXFormatter
         
-        # Get unit string from the formula result
-        unit_str = get_compact_unit_string(self.formula.result)
-        if unit_str:
-            # Handle composite units with \cdot properly
-            if '\\cdot' in unit_str:
-                import re
-                parts = unit_str.split(' \\cdot ')
-                formatted_parts = []
-                for part in parts:
-                    part = part.strip()
-                    match = re.match(r'^([a-zA-Z]+)(\^\{\d+\})?$', part)
-                    if match:
-                        unit_name, superscript = match.groups()
-                        formatted_parts.append(f'\\text{{{unit_name}}}{superscript if superscript else ""}')
-                    else:
-                        formatted_parts.append(f'\\text{{{part}}}')
-                unit_str = f" \\, {' \\cdot '.join(formatted_parts)}"
-            else:
-                unit_str = f" \\, \\text{{{unit_str}}}"
-        
+        result = self.formula.result
         from .formula import EngineeringFunction
         if isinstance(self.expected_value, EngineeringFunction):
-            expected_val = self._get_single_value(self.expected_value.result, index)
-            expected_str = self.expected_value.name
+            expected = self.expected_value.result
+            expected_label = self.expected_value.name
         else:
-            expected_val = self._get_single_value(self.expected_value, index)
-            expected_str = str(expected_val)
+            expected = self.expected_value
+            expected_label = None
+        
+        if is_quantity(result) and is_quantity(expected):
+            expected = expected.to(result.units)
+        
+        result_val = self._get_single_value(result, index)
+        expected_val = self._get_single_value(expected, index)
+        
+        result_str = LaTeXFormatter.format_value(result, index, precision)
+        expected_val_str = LaTeXFormatter.format_value(expected, index, precision)
+        expected_str = expected_label if expected_label is not None else expected_val_str
         
         relative_diff = abs((result_val - expected_val) / expected_val)
         passed = relative_diff <= self.tolerance
@@ -491,7 +467,7 @@ class Equality(EngineeringCheck):
         
         check_text = (
             f"{self.formula.name} \\approx {expected_str}"
-            f"&= {result_val:.2f}{unit_str} \\approx {expected_val:.2f}{unit_str} \\\\ "
+            f"&= {result_str} \\approx {expected_val_str} \\\\ "
             f"\\text{{Check}} &= \\text{{{status_msg}}}"
         )
         
@@ -535,7 +511,7 @@ class InvalidResult(EngineeringCheck):
         
         return self
     
-    def generate_latex(self, index: int) -> str:
+    def generate_latex(self, index: int, precision: int = 3) -> str:
         """Generate LaTeX representation of invalid result check."""
         if self.applied_status_codes is None:
             return ""

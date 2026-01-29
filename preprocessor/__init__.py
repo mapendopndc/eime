@@ -17,10 +17,11 @@ BeamDesignResults : Results wrapper with beam-aware methods
 
 PyNite Integration Modules
 ---------------------------
-pynite_shear : Extract shear diagrams and segment data from PyNite models
+analysis : Extract shear diagrams and segment data from PyNite models
     - extract_shear_diagram()
     - identify_shear_segments()
-    - calculate_cv_for_segment()
+    - prepare_shear_segment_arrays()
+    - compute_sum_g()
     
 shear_viz : Visualize shear diagrams and segments
     - plot_shear_diagram_with_segments()
@@ -29,7 +30,7 @@ shear_viz : Visualize shear diagrams and segments
 Typical Workflow
 ----------------
 1. Run PyNite analysis
-2. Use pynite_shear to extract shear data
+2. Use analysis module to extract shear data
 3. Define beam geometry (spans, supports, bracing)
 4. Generate mesh at design stations
 5. Extract/map parameters at each station
@@ -48,9 +49,10 @@ from .parameters import (
 )
 from .results import BeamDesignResults
 
-# PyNite integration modules are available as submodules
-# Import as: from preprocessor import pynite_shear, shear_viz
-# Or: from preprocessor.pynite_shear import extract_shear_diagram
+# PyNite integration:
+# - General PyNite extraction: from preprocessor.pynite_extraction import extract_shear_diagram
+# - CSA O86 shear segments: from design.csa_o86_2025.shear_segments import prepare_shear_segment_arrays
+# - Orchestration: from preprocessor.pynite_csa_mapper import map_pynite_to_stations
 
 __all__ = [
     "Beam",
@@ -61,6 +63,5 @@ __all__ = [
     "ParameterAssembler",
     "BeamDesignResults",
     # PyNite modules available as submodules
-    "pynite_shear",
     "shear_viz",
 ]

@@ -129,6 +129,8 @@ class Beam:
         Get unbraced length at position x.
         
         Returns the distance between bracing points on either side of x.
+        For points exactly at a bracing location, returns the maximum of the
+        adjacent segments (conservative approach).
         
         Parameters
         ----------
@@ -143,9 +145,28 @@ class Beam:
         if x < 0 or x > self.total_length:
             return 0.0
         
+        # Check if exactly at a bracing point
+        tol = 1e-6
+        at_brace = np.any(np.abs(self.bracing_locations - x) < tol)
+        
+        if at_brace:
+            # Find adjacent segments and return the maximum (conservative)
+            idx = np.argmin(np.abs(self.bracing_locations - x))
+            segments = []
+            
+            # Left segment
+            if idx > 0:
+                segments.append(self.bracing_locations[idx] - self.bracing_locations[idx - 1])
+            
+            # Right segment
+            if idx < len(self.bracing_locations) - 1:
+                segments.append(self.bracing_locations[idx + 1] - self.bracing_locations[idx])
+            
+            return max(segments) if segments else 0.0
+        
         # Find bracing points on either side
-        left_brace = self.bracing_locations[self.bracing_locations <= x]
-        right_brace = self.bracing_locations[self.bracing_locations >= x]
+        left_brace = self.bracing_locations[self.bracing_locations < x]
+        right_brace = self.bracing_locations[self.bracing_locations > x]
         
         if len(left_brace) == 0 or len(right_brace) == 0:
             return 0.0

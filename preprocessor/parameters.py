@@ -125,7 +125,7 @@ class AnalysisMapper:
             - 'V_D', 'V_L', 'V_S': Shears by load case (for K_D)
             - 'W_f': Total factored load for shear coefficient
             - 'Sum_G': Sum of G factors for shear coefficient
-            - 'l_a', 'l_b': Shear segment distances
+            - 'l_a': Shear segment distance
         """
         x_stations = self.mesh.x_stations
         n = len(x_stations)
@@ -149,7 +149,6 @@ class AnalysisMapper:
         W_f = self._extract_demand('W_f', x_stations, default_value=0.0)
         Sum_G = self._extract_demand('Sum_G', x_stations, default_value=0.0)
         l_a = self._extract_demand('l_a', x_stations, default_value=0.0)
-        l_b = self._extract_demand('l_b', x_stations, default_value=0.0)
         
         # Bending size factor segment length (distance between zero moment points)
         L_zbg = self._extract_demand('L_zbg', x_stations, default_value=0.0)
@@ -167,7 +166,6 @@ class AnalysisMapper:
             'W_f': W_f,
             'Sum_G': Sum_G,
             'l_a': l_a,
-            'l_b': l_b,
             'L_zbg': L_zbg,
         }
     

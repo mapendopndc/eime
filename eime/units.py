@@ -141,16 +141,17 @@ def get_compact_unit_string(value: Any) -> str:
     if not is_quantity(value):
         return ""
     
-    # Use the compact format
-    unit_str = f"{value.units:~}"
+    # Use :~P for pretty compact format (preserves defined units better)
+    unit_str = f"{value.units:~P}"
     
     # Convert ** notation to LaTeX superscript with braces
     # Replace ' ** X' with '^{X}' for LaTeX
     import re
     unit_str = re.sub(r'\s*\*\*\s*(\d+)', r'^{\1}', unit_str)
     
-    # Also handle multiplication sign
+    # Also handle multiplication sign - both * and ·
     unit_str = unit_str.replace(' * ', ' \\cdot ')
+    unit_str = unit_str.replace('·', ' \\cdot ')
     
     return unit_str
 

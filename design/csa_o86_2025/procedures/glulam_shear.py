@@ -46,7 +46,7 @@ def glulam_shear_procedure(
     procedure = EngineeringProcedure("Glulam Beam Shear Procedure")
     
     if KD is not None:
-        procedure.add_computation(KD)
+        procedure.add_computation(KD, show_util=False)
     if CV is not None:
         procedure.add_computation(CV)
     if Fv is not None:

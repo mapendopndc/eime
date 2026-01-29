@@ -3,7 +3,7 @@ import numpy as np
 from pint import UnitRegistry
 from Pynite.FEModel3D import FEModel3D
 from preprocessor import Beam, BeamMesh
-from preprocessor.analysis import map_pynite_to_stations
+from preprocessor.pynite_csa_mapper import map_pynite_to_stations
 
 # Initialize
 ureg = UnitRegistry()

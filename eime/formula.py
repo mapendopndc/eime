@@ -98,12 +98,13 @@ class EngineeringFunction(ABC):
         pass
     
     @abstractmethod
-    def generate_function_latex(self, index: int) -> str:
+    def generate_function_latex(self, index: int, precision: int = 3) -> str:
         """
         Generate LaTeX for the function equation.
         
         Args:
             index: Index for array-like results
+            precision: Number of significant figures for numeric output (default 3)
             
         Returns:
             LaTeX string
@@ -120,12 +121,13 @@ class EngineeringFunction(ABC):
         """
         pass
     
-    def generate_checks_latex(self, index: int) -> str:
+    def generate_checks_latex(self, index: int, precision: int = 3) -> str:
         """
         Generate LaTeX for all checks.
         
         Args:
             index: Index for array-like results
+            precision: Number of significant figures for numeric output (default 3)
             
         Returns:
             LaTeX string
@@ -133,26 +135,27 @@ class EngineeringFunction(ABC):
         if not self.checks:
             return ""
         
-        return LaTeXFormatter.format_check_summary(self.checks, index)
+        return LaTeXFormatter.format_check_summary(self.checks, index, precision)
     
-    def generate_latex(self, index: int = 0) -> str:
+    def generate_latex(self, index: int = 0, precision: int = 3) -> str:
         """
         Generate complete LaTeX representation.
         
         Args:
             index: Index for array-like results
+            precision: Number of significant figures for numeric output (default 3)
             
         Returns:
             Complete LaTeX string with formula, params, and checks wrapped in align*
         """
-        content = self.generate_function_latex(index) + " \\\\ "
+        content = self.generate_function_latex(index, precision) + " \\\\ "
         
         param_latex = self.generate_param_latex()
         if param_latex:
             content += param_latex
             # Remove trailing space and add line break only if we have more content
         
-        checks_latex = self.generate_checks_latex(index)
+        checks_latex = self.generate_checks_latex(index, precision)
         if checks_latex:
             if param_latex:
                 content += " \\\\ "
@@ -343,7 +346,7 @@ class EngineeringFormula(EngineeringFunction):
         
         return self
     
-    def generate_function_latex(self, index: int) -> str:
+    def generate_function_latex(self, index: int, precision: int = 3) -> str:
         """Generate LaTeX equation for the formula."""
         # Get LaTeX symbols
         symbols = [self.params[key].latex for key in self.inputs.keys() if key in self.params]
@@ -355,12 +358,12 @@ class EngineeringFormula(EngineeringFunction):
             if isinstance(value, str):
                 substitutions.append(value)
             else:
-                substitutions.append(LaTeXFormatter.format_value(value, index))
+                substitutions.append(LaTeXFormatter.format_value(value, index, precision))
         
         substituted_formula = self.latex_template(*substitutions)
         
         # Format result (result_unit already handled conversion if specified)
-        result_str = LaTeXFormatter.format_value(self.result, index)
+        result_str = LaTeXFormatter.format_value(self.result, index, precision)
         
         # Add source tag if provided
         source_tag = f"\\tag{{{self.source}}}" if self.source else ""
@@ -558,7 +561,7 @@ class EngineeringSwitch(EngineeringFunction):
         
         return self
     
-    def generate_function_latex(self, index: int) -> str:
+    def generate_function_latex(self, index: int, precision: int = 3) -> str:
         """Generate LaTeX for the switch selection."""
         # Get current input value
         input_val = self._get_value_at_index(self.solved_inputs[0], index)
@@ -590,7 +593,7 @@ class EngineeringSwitch(EngineeringFunction):
             if isinstance(output, EngineeringFunction):
                 # Use generate_function_latex to get just the equation without align* wrapper
                 # Don't wrap in aligned - let it participate in parent align* alignment
-                func_latex = output.generate_function_latex(index)
+                func_latex = output.generate_function_latex(index, precision)
                 output_strs.append(func_latex)
                 output_is_function.append(True)
             else:

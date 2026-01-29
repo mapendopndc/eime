@@ -11,7 +11,7 @@ preparing mesh-based inputs for vectorized design calculations.
 ```
 PyNite Analysis (FEM Model)
     ↓
-PyNite Shear Extraction (pynite_shear.py)
+PyNite Analysis Integration (analysis.py)
     ↓
 Beam Geometry Definition (Beam)
     ↓
@@ -117,10 +117,10 @@ params = assembler.assemble()
 # Ready for TimberBeamDesign
 ```
 
-### 5. PyNite Integration (analysis.py)
+### 5. PyNite Integration (pynite_csa_mapper.py)
 Helper functions to extract demands from PyNite FEM:
 ```python
-from preprocessor.analysis import map_pynite_to_stations
+from preprocessor.pynite_csa_mapper import map_pynite_to_stations
 
 # Extract all demands from PyNite model with sophisticated shear analysis
 demands = map_pynite_to_stations(
@@ -161,7 +161,7 @@ The shear load coefficient (C_V) per CSA O86 7.5.7.6 requires **W_f** and **Sum_
 
 ```python
 # The sophisticated calculation happens automatically in map_pynite_to_stations:
-from preprocessor.pynite_shear import prepare_shear_segment_arrays, compute_sum_g
+from design.csa_o86_2025.shear_segments import prepare_shear_segment_arrays, compute_sum_g
 from design.csa_o86_2025.formulas.glulam_shear import g_factor
 
 # Prepare segment data

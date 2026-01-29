@@ -73,7 +73,7 @@ def glulam_bending_procedure(
     procedure = EngineeringProcedure("Glulam Beam Bending Procedure")
     
     if KD is not None:
-        procedure.add_computation(KD)
+        procedure.add_computation(KD, show_util=False)
     if Fb is not None:
         procedure.add_computation(Fb)
     if lambda1 is not None:
