@@ -20,7 +20,7 @@ from design.csa_o86_2025.calculators import (
     TimberBeamDesign
 )
 from design.csa_o86_2025.formulas.glulam_shear import g_factor
-from design.csa_o86_2025.shear_segments import prepare_shear_segment_arrays, compute_sum_g
+from design.csa_o86_2025.preprocessing.pynite_helpers import prepare_shear_segment_arrays, compute_sum_g
 from eime.units import ureg
 from load.nbcc2020.combos import nbcc_uls_combinations
 

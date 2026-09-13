@@ -88,7 +88,8 @@ def main():
     
     print(f"   Section: 175 x 456 mm")
     print(f"   Material: 20f-E Douglas Fir-Larch")
-    print(f"   f_b = {material.f_b.to(MPa).magnitude:.1f} MPa")
+    print(f"   f_b (positive) = {material.f_b_pos.to(MPa).magnitude:.1f} MPa")
+    print(f"   f_b (negative) = {material.f_b_neg.to(MPa).magnitude:.1f} MPa")
     
     # ==========================================
     # 4. CREATE PYNITE FEM MODEL

@@ -7,7 +7,7 @@ per CSA O86 7.5.7.6.
 
 import pytest
 import numpy as np
-from design.csa_o86_2025.shear_segments import (
+from design.csa_o86_2025.preprocessing.pynite_helpers import (
     identify_shear_segments,
     prepare_shear_segment_arrays,
     compute_sum_g

@@ -178,12 +178,22 @@ def create_diagram_figure(
     # Add resistance lines
     if resistances:
         if diagram_type == 'moment' and 'M_r' in resistances:
+            # Positive resistance line
             fig.add_trace(go.Scatter(
                 x=resistances['x_stations'],
                 y=resistances['M_r'],
                 mode='lines',
                 name='M_r (Resistance)',
                 line=dict(width=2, color='red', dash='dash')
+            ))
+            # Negative resistance line
+            fig.add_trace(go.Scatter(
+                x=resistances['x_stations'],
+                y=[-m for m in resistances['M_r']],
+                mode='lines',
+                name='-M_r (Resistance)',
+                line=dict(width=2, color='red', dash='dash'),
+                showlegend=False
             ))
         
         elif diagram_type == 'shear' and 'V_r' in resistances:
@@ -269,7 +279,7 @@ def add_shear_segment_annotations(
         Modified figure with annotations
     """
     try:
-        from design.csa_o86_2025.shear_segments import prepare_shear_segment_arrays
+        from design.csa_o86_2025.preprocessing.pynite_helpers import prepare_shear_segment_arrays
         
         if isinstance(member_names, str):
             member_names = [member_names]

@@ -51,7 +51,7 @@ from .results import BeamDesignResults
 
 # PyNite integration:
 # - General PyNite extraction: from preprocessor.pynite_extraction import extract_shear_diagram
-# - CSA O86 shear segments: from design.csa_o86_2025.shear_segments import prepare_shear_segment_arrays
+# - CSA O86 shear segments: from design.csa_o86_2025.preprocessing.pynite_helpers import prepare_shear_segment_arrays
 # - Orchestration: from preprocessor.pynite_csa_mapper import map_pynite_to_stations
 
 __all__ = [

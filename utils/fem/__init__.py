@@ -3,7 +3,7 @@
 
 Note: PyNite integration is available in the preprocessor package.
 General extraction: from preprocessor.pynite_extraction import extract_shear_diagram
-CSA O86 shear: from design.csa_o86_2025.shear_segments import prepare_shear_segment_arrays
+CSA O86 shear: from design.csa_o86_2025.preprocessing.pynite_helpers import prepare_shear_segment_arrays
 """
 
 # This module previously contained pynite_shear.py

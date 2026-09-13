@@ -182,14 +182,16 @@ def extract_all_demands(
     for i, x in enumerate(x_coords):
         try:
             # Extract factored combo demands
-            M_f[i] = abs(member.moment('Mz', x, load_combo))
+            # Note: Preserve moment sign for proper f_b selection (pos/neg bending)
+            M_f[i] = member.moment('Mz', x, load_combo)
             V_f[i] = abs(member.shear('Fy', x, load_combo))
             P_f[i] = abs(member.axial(x, load_combo))
             
             # Extract individual load case demands
             if load_cases:
                 for case in load_cases:
-                    load_case_data[case]['M'][i] = abs(member.moment('Mz', x, case))
+                    # Preserve moment sign for load case moments too
+                    load_case_data[case]['M'][i] = member.moment('Mz', x, case)
                     load_case_data[case]['V'][i] = abs(member.shear('Fy', x, case))
                     load_case_data[case]['P'][i] = abs(member.axial(x, case))
         
@@ -197,7 +199,7 @@ def extract_all_demands(
             # Handle missing combo/case - try default
             print(f"Warning: Issue at x={x}, trying defaults")
             try:
-                M_f[i] = abs(member.moment('Mz', x))
+                M_f[i] = member.moment('Mz', x)
                 V_f[i] = abs(member.shear('Fy', x))
                 P_f[i] = abs(member.axial(x))
             except Exception:

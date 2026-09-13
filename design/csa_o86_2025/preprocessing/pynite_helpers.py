@@ -1,8 +1,11 @@
 """
-CSA O86 shear segment analysis utilities.
+CSA O86 PyNite preprocessing utilities.
 
-This module implements shear force segmentation and analysis per CSA O86-19
-clause 7.5.7.6 for calculating the shear load coefficient (CV).
+This module provides utilities for extracting and processing PyNite FEA results
+for CSA O86-19 design calculations, including:
+- Shear segment analysis per CSA O86 clause 7.5.7.6
+- Zero moment segment calculation for size factors
+- Array preparation for design formulas
 """
 
 import numpy as np
@@ -197,13 +200,11 @@ def identify_shear_segments(
                                     interpolated_pos = positions[min_idx] + offset
                                 else:
                                     interpolated_pos = positions[min_idx]
-                                end_idx = min_idx
                             else:
                                 # Not a true local minimum, just use the smallest value
-                                end_idx = min_idx
                                 interpolated_pos = positions[min_idx]
                         else:
-                            end_idx = min_idx
+                            pass
                 
                 if end_idx > segment_start_idx:
                     # Use interpolated position if available, otherwise use sampled position
@@ -420,21 +421,63 @@ def calculate_zero_moment_segments(
     zero_points.append(L_member)
     zero_points = sorted(set(zero_points))  # Remove duplicates and sort
     
+    # Merge zero points that are very close together (within 1mm tolerance)
+    tolerance = 1e-3  # 1mm
+    merged_zero_points = []
+    for zp in zero_points:
+        if not merged_zero_points or abs(zp - merged_zero_points[-1]) > tolerance:
+            merged_zero_points.append(zp)
+    zero_points = merged_zero_points
+    
     # For each station, find which segment it's in
     L_zbg = np.zeros(len(x_stations))
     
     for i, x_station in enumerate(x_stations):
-        # Find the zero moment points surrounding this station
+        # Find the zero moment segment containing this station
+        # If station is at or very close to an inflection point, use the adjacent non-zero segment
         left_zero = 0.0
         right_zero = L_member
+        segment_found = False
         
         for j in range(len(zero_points) - 1):
             if zero_points[j] <= x_station <= zero_points[j+1]:
                 left_zero = zero_points[j]
                 right_zero = zero_points[j+1]
+                segment_found = True
                 break
         
-        # Segment length is distance between these points
+        # If station is at or very close to an inflection point (segment is very small),
+        # use the adjacent segment with non-zero length
+        segment_length = right_zero - left_zero
+        if segment_found and segment_length < tolerance:
+            # Try to use adjacent segments
+            found_idx = None
+            for j in range(len(zero_points) - 1):
+                if abs(zero_points[j] - x_station) < tolerance or abs(zero_points[j+1] - x_station) < tolerance:
+                    found_idx = j
+                    break
+            
+            if found_idx is not None:
+                # Look for adjacent non-zero segments
+                # Try segment to the left first
+                if found_idx > 0:
+                    left_candidate = zero_points[found_idx - 1]
+                    right_candidate = zero_points[found_idx]
+                    if (right_candidate - left_candidate) >= tolerance:
+                        left_zero = left_candidate
+                        right_zero = right_candidate
+                        segment_length = right_zero - left_zero
+                
+                # If still zero or very small, try segment to the right
+                if segment_length < tolerance and found_idx < len(zero_points) - 2:
+                    left_candidate = zero_points[found_idx + 1]
+                    right_candidate = zero_points[found_idx + 2]
+                    if (right_candidate - left_candidate) >= tolerance:
+                        left_zero = left_candidate
+                        right_zero = right_candidate
+                        segment_length = right_zero - left_zero
+        
+        # Segment length is distance between inflection points
         L_zbg[i] = right_zero - left_zero
     
     return L_zbg

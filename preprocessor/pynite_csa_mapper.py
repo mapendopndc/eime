@@ -15,7 +15,7 @@ from preprocessor.pynite_extraction import (
 )
 
 # Import CSA O86-specific shear segment analysis
-from design.csa_o86_2025.shear_segments import (
+from design.csa_o86_2025.preprocessing.pynite_helpers import (
     calculate_zero_moment_segments,
     calculate_shear_segment_parameters,
 )

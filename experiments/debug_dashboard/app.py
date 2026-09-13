@@ -9,6 +9,8 @@ import streamlit as st
 import numpy as np
 from pint import UnitRegistry
 import warnings
+import json
+from pathlib import Path
 
 # Suppress division warnings from Pint
 warnings.filterwarnings('ignore', 'invalid value encountered in divide', RuntimeWarning)
@@ -32,15 +34,28 @@ MPa = ureg.MPa
 kPa = ureg.kPa
 nd = ureg.dimensionless
 
+@st.cache_data
+def load_glulam_table():
+    """Load glulam table from JSON file."""
+    table_path = Path(__file__).parent.parent.parent / "design" / "csa_o86_2025" / "tables" / "CSA O86-24_T7-2.json"
+    with open(table_path, 'r', encoding='utf-8') as f:
+        return json.load(f)
+
+
 @st.cache_resource
-def create_beam_model(config: ModelConfig = None):
-    """Create and analyze beam model from configuration."""
-    if config is None:
+def create_beam_model(_config: ModelConfig = None, cache_key: str = "default"):
+    """Create and analyze beam model from configuration.
+    
+    Args:
+        _config: ModelConfig object (prefixed with _ to exclude from cache key)
+        cache_key: Explicit cache key based on config values
+    """
+    if _config is None:
         # Use default configuration
         return create_default_model(ureg)
     else:
         # Use custom configuration
-        builder = ModelBuilder(config, ureg)
+        builder = ModelBuilder(_config, ureg)
         return builder.build()
 
 
@@ -62,7 +77,7 @@ def analyze_station(beam_data, design_data, load_combo, station_idx):
     """Extract analysis for a specific station from pre-calculated design data."""
     
     mesh = beam_data['mesh']
-    material_ureg = beam_data['section'].material.f_b._REGISTRY
+    material_ureg = beam_data['section'].material.f_b_pos._REGISTRY
     kN = material_ureg.kN
     m = material_ureg.m
     
@@ -132,7 +147,7 @@ def calculate_all_design_data(beam_data, load_combos):
     section = beam_data['section']
     
     # Use the same ureg as the material to ensure consistency
-    material_ureg = section.material.f_b._REGISTRY
+    material_ureg = section.material.f_b_pos._REGISTRY
     m = material_ureg.m
     mm = material_ureg.mm
     kN = material_ureg.kN
@@ -387,18 +402,26 @@ def main():
             key="depth"
         )
         
-        grade = st.selectbox(
-            "Grade",
-            options=["20f-E", "24f-E", "16c-E"],
-            index=0,
-            key="grade"
-        )
+        # Load glulam table to get available species and grades
+        glulam_table = load_glulam_table()
+        available_species = list(glulam_table.keys())
         
+        # Species selection first
         species = st.selectbox(
             "Species",
-            options=["Douglas Fir-Larch", "Hem-Fir", "Spruce-Pine"],
+            options=available_species,
             index=0,
             key="species"
+        )
+        
+        # Grade options depend on selected species
+        available_grades = list(glulam_table[species].keys())
+        
+        grade = st.selectbox(
+            "Grade",
+            options=available_grades,
+            index=0,
+            key="grade"
         )
     
     with st.sidebar.expander("📦 Applied Loads", expanded=False):
@@ -524,20 +547,20 @@ def main():
         load_combinations=LoadCombinationConfig()  # Use defaults
     )
     
-    # Button to rebuild model with new configuration
-    if st.sidebar.button("🔄 Rebuild Model", type="primary"):
-        st.cache_resource.clear()
-        st.rerun()
-    
-    st.sidebar.markdown("---")
-    st.sidebar.caption("💡 Modify settings and click 'Rebuild Model' to update")
-    
     # ==========================================
     # CREATE MODEL
     # ==========================================
     
+    # Create hierarchical cache keys for different calculation stages
+    geometry_key = f"{tuple(support_locations)}_{tuple(bracing_locations)}_{mesh_spacing}"
+    loads_key = f"{geometry_key}_{dead_load}_{live_load}_{snow_load}_{apply_snow_first_span}_{apply_live_second_span}_{add_point_load}"
+    if add_point_load:
+        loads_key += f"_{point_magnitude}_{point_position}_{point_case}"
+    section_key = f"{width_mm}_{depth_mm}_{grade}_{species}"
+    design_cache_key = f"design_{loads_key}_{section_key}"
+    
     with st.spinner("Creating beam model..."):
-        beam_data = create_beam_model(model_config)
+        beam_data = create_beam_model(model_config, cache_key=loads_key)
     
     model = beam_data['model']
     mesh = beam_data['mesh']
@@ -567,12 +590,13 @@ def main():
     # CALCULATE ALL DESIGN DATA ONCE (cached)
     # ==========================================
     
-    # Cache the complete design calculation in session state
-    if 'all_design_data' not in st.session_state:
+    # Cache design calculations with section-aware key
+    # This allows reusing analysis/preprocessing when only section properties change
+    if design_cache_key not in st.session_state:
         with st.spinner("Running design calculations for all load combinations..."):
-            st.session_state.all_design_data = calculate_all_design_data(beam_data, load_combos)
+            st.session_state[design_cache_key] = calculate_all_design_data(beam_data, load_combos)
     
-    design_data = st.session_state.all_design_data
+    design_data = st.session_state[design_cache_key]
     
     # Extract resistances for plotting if needed
     if diagram_type in ['shear', 'moment']:
@@ -614,7 +638,7 @@ def main():
     
     # Add shear segment annotations if needed
     if diagram_type == 'shear':
-        material_ureg = beam_data['section'].material.f_b._REGISTRY
+        material_ureg = beam_data['section'].material.f_b_pos._REGISTRY
         beam_length = get_total_beam_length(beam_data)
         fig = add_shear_segment_annotations(
             fig=fig,
@@ -819,11 +843,11 @@ def main():
         
         # Show detailed segment breakdown for the segment containing this station
         with st.expander("View G Factor Parameters for This Station's Segment"):
-            from design.csa_o86_2025.shear_segments import prepare_shear_segment_arrays, compute_sum_g
+            from design.csa_o86_2025.preprocessing.pynite_helpers import prepare_shear_segment_arrays, compute_sum_g
             from design.csa_o86_2025.formulas.glulam_shear import g_factor
             
             # Get unit registry from beam_data
-            material_ureg = beam_data['section'].material.f_b._REGISTRY
+            material_ureg = beam_data['section'].material.f_b_pos._REGISTRY
             m = material_ureg.m
             kN = material_ureg.kN
             model = beam_data['model']
@@ -927,7 +951,9 @@ def main():
         
         st.write("**Material:**")
         st.write(f"- Grade: {section_config.grade} {section_config.species}")
-        st.write(f"- f_b: {beam_data['material'].f_b.to(MPa).magnitude:.1f} MPa")
+        st.write(f"- f_b (positive): {beam_data['material'].f_b_pos.to(MPa).magnitude:.1f} MPa (compression on top)")
+        st.write(f"- f_b (negative): {beam_data['material'].f_b_neg.to(MPa).magnitude:.1f} MPa (compression on bottom)")
+        st.caption("Convention: Positive applied moment → use f_b_neg | Negative applied moment → use f_b_pos")
         st.write(f"- f_v: {beam_data['material'].f_v.to(MPa).magnitude:.2f} MPa")
         st.write(f"- E: {beam_data['material'].E.to(MPa).magnitude:.0f} MPa")
     
@@ -936,6 +962,25 @@ def main():
         
         bending_proc = station_data['design']['bending_proc']
         shear_proc = station_data['design']['shear_proc']
+        
+        # Show which bending strength is being used based on moment sign
+        M_f = station_data['demands']['M_f']
+        
+        st.info(f"**Applied Moment:** M_f = {M_f:+.2f} kN·m")
+        
+        # Determine which f_b is being used based on convention
+        # Positive moment → f_b_neg (compression on bottom)
+        # Negative moment → f_b_pos (compression on top)
+        if M_f >= 0:
+            fb_used = "f_b_neg (negative bending - compression on bottom fiber)"
+            fb_value = beam_data['material'].f_b_neg.to(MPa).magnitude
+        else:
+            fb_used = "f_b_pos (positive bending - compression on top fiber)"
+            fb_value = beam_data['material'].f_b_pos.to(MPa).magnitude
+        
+        st.write(f"**Bending Strength Used:** {fb_used} = {fb_value:.1f} MPa")
+        
+        st.markdown("---")
         
         # Generate full LaTeX documentation for bending
         st.write("**Bending Resistance Procedure:**")

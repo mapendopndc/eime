@@ -161,7 +161,7 @@ The shear load coefficient (C_V) per CSA O86 7.5.7.6 requires **W_f** and **Sum_
 
 ```python
 # The sophisticated calculation happens automatically in map_pynite_to_stations:
-from design.csa_o86_2025.shear_segments import prepare_shear_segment_arrays, compute_sum_g
+from design.csa_o86_2025.preprocessing.pynite_helpers import prepare_shear_segment_arrays, compute_sum_g
 from design.csa_o86_2025.formulas.glulam_shear import g_factor
 
 # Prepare segment data

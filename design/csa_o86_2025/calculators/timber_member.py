@@ -31,7 +31,8 @@ class TimberMaterial:
         props = TimberTables.SpecifiedStrengthTable[species][grade]
         
         # Store as Pint quantities with units
-        self.f_b = props["f_b_pos"] * ureg.MPa
+        self.f_b_pos = props["f_b_pos"] * ureg.MPa  # Positive bending strength
+        self.f_b_neg = props["f_b_neg"] * ureg.MPa  # Negative bending strength
         self.f_v = props["f_v"] * ureg.MPa
         self.f_c = props["f_c"] * ureg.MPa
         self.E = props["E"] * ureg.MPa
@@ -131,7 +132,11 @@ class TimberBeamDesign:
         self.checklist: Dict[int, EngineeringCheck] = {}
 
     def BendingResistance(self, axis, sign) -> EngineeringProcedure:
-        """Calculate bending resistance per CSA O86."""
+        """Calculate bending resistance per CSA O86.
+        
+        The method automatically detects the sign of bending moment at each station
+        and uses the appropriate bending strength (f_b_pos or f_b_neg).
+        """
         
         loads = self.loading
         params = self.parameters
@@ -146,7 +151,22 @@ class TimberBeamDesign:
         kd_table_vector = np.array([TimberTables.kd_from_load_type(t) for t in loading_params.load_combo_types]) * nd
         
         calcs["KD"] = TimberDesign.load_duration_factor(ratio=ratio_vector, P_L=loading_params.P_L_M, P_S=loading_params.P_S_M, kd_table=kd_table_vector)
-        calcs["Fb"] = TimberDesign.modified_bending_strength(mat.f_b, calcs["KD"].result, params.K_H, params.K_Sb, params.K_T)
+        
+        # Determine which f_b to use based on moment sign
+        # Convention: Positive applied moment → negative bending (compression on bottom)
+        #            Negative applied moment → positive bending (compression on top)
+        # Detect moment sign from loads.M3 (can be scalar or array)
+        if loads.M3 is not None:
+            # Convert to array if scalar
+            M_values = np.atleast_1d(loads.M3.magnitude if hasattr(loads.M3, 'magnitude') else loads.M3)
+            # Use f_b_neg for positive moments, f_b_pos for negative moments
+            # Create array of f_b values matching the moment sign at each station
+            f_b_array = np.where(M_values >= 0, mat.f_b_neg.magnitude, mat.f_b_pos.magnitude) * params.ureg.MPa
+        else:
+            # If no moment specified, default to negative bending strength
+            f_b_array = mat.f_b_neg
+        
+        calcs["Fb"] = TimberDesign.modified_bending_strength(f_b_array, calcs["KD"].result, params.K_H, params.K_Sb, params.K_T)
         calcs["KZbg"] = TimberDesign.bending_size_factor(dim.b, dim.d, params.L_zbg)
         calcs["S"] = TimberDesign.section_modulus(dim.b, dim.d)
         calcs["lambda1"] = TimberDesign.slenderness_ratio(params.lu, dim.d, dim.b)
